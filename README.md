@@ -1,60 +1,104 @@
-# Welcome Board — Bảng chào mừng khách / đoàn
+# PIP Welcome Board
 
-Bảng chào mừng hiển thị toàn màn hình (1920×1080) cho khách, đoàn kiểm tra, đoàn công tác, sinh viên thực tập… Tự chỉnh trực tiếp trên trình duyệt, không cần cài đặt gì.
+Ung dung tao bang chao mung khach/doan cho Phil Inter Pharma. App chay truc tiep tu mot file `index.html`, khong can backend, khong can buoc build, phu hop de mo tren trinh duyet hoac deploy GitHub Pages.
 
-🔗 **Demo:** https://<tên-github>.github.io/<tên-repo>/
+## Muc dich ung dung
 
----
+- Tao welcome board kich thuoc 1920x1080 de chieu len TV/man hinh.
+- Nhap danh sach cong ty/doan va thanh vien truc tiep tren trinh duyet.
+- Ho tro nhap Excel `.xlsx`/`.xls`, tu gom nhom theo cong ty va loc theo ngay.
+- Xem truoc va tai PNG dung kich thuoc 1920x1080.
+- Tu luu du lieu vao `localStorage` cua trinh duyet.
 
-## Tính năng
+## Cac che do hien thi
 
-- **Chỉnh trực tiếp** — bấm nút **✎ Chỉnh sửa** (góc dưới phải) để thêm/bớt đơn vị, thêm/bớt người, sửa tên, chức vụ, vai trò.
-- **Nhiều đơn vị / đoàn** — mỗi đơn vị là một khối có tiêu đề riêng.
-- **3 kiểu thẻ** tự thích ứng:
-  - Có vai trò → hiện huy hiệu (Trưởng Đoàn, Thành Viên…)
-  - Chỉ chức vụ → thẻ gọn, căn hai đầu
-  - Chỉ tên đơn vị (không có người) → hiện tên lớn, căn giữa
-- **Tùy biến hiển thị** bằng công tắc gạt: hiện/ẩn chức vụ, hiện/ẩn vai trò, chức vụ xuống dòng hay căn sang phải.
-- **Cỡ chữ & kiểu chữ** — Be Vietnam Pro, Montserrat, Playfair Display, Lora; phóng 70%–160%.
-- **Màu chủ đạo** — 6 màu chọn sẵn, áp cho cả bảng hoặc **riêng từng người**.
-- **Nhập từ Excel** — chọn file `.xlsx`, tự gom nhóm theo Tên công ty và lọc theo cột Ngày tháng.
-- **Xuất PNG 1920×1080** — tải ảnh đúng độ phân giải để chiếu lên màn hình/TV.
-- **Tự lưu** — mọi chỉnh sửa lưu trong trình duyệt, mở lại vẫn còn.
+Ung dung hien co 3 tab layout trong panel chinh sua:
 
----
+- `Cu`: layout mac dinh hien tai. Khung xanh, logo PHIL/INTER PHARMA, chu WELCOME, ten cong ty/doan o giua va danh sach thanh vien dang ten - vai tro. Neu chi co ten cong ty ma khong co thanh vien, ten cong ty van phai hien.
+- `Thuong`: layout hien dai dang card. Moi cong ty/doan co tieu de rieng, thanh vien co ten, chuc vu va vai tro dang badge. Ho tro mau chu dao va mau rieng tung nguoi.
+- `VIP`: layout don gian cho khach VIP. Chu WELCOME lon, danh sach ten khach o giua, logo/ten cong ty khach o goc trai duoi va logo PHIL o goc phai duoi.
 
-## Cách dùng
+## Chuc nang chinh
 
-1. Mở link demo (hoặc mở `index.html` bằng trình duyệt).
-2. Bấm **✎ Chỉnh sửa** để nhập danh sách, hoặc **📄 Chọn file Excel…** để nạp từ file.
-3. Tinh chỉnh hiển thị (cỡ chữ, màu, kiểu chữ…) trong panel.
-4. Bấm **⬇ Tải PNG 1920×1080** để xuất ảnh.
+- Them/xoa cong ty hoac don vi.
+- Them/xoa thanh vien.
+- Sua ten, gioi tinh, chuc vu, vai tro.
+- Keo tha de doi thu tu thanh vien trong cung mot cong ty.
+- Bat/tat hien thi chuc vu va vai tro.
+- Chon chuc vu xuong dong hoac nam cung dong.
+- Chon font, co chu va mau chu dao.
+- Chon mau rieng cho tung thanh vien.
+- Nhap Excel va chon ngay hien thi.
+- Tao preview PNG va tai file ve may.
 
-### Định dạng file Excel
+## Cau truc code hien tai
 
-File cần có hàng tiêu đề với các cột (tiếng Việt hoặc Anh đều nhận):
+Repo hien rat gon:
 
-| Tên Công ty | Họ và tên khách | Chức vụ | Ngày tháng |
-|-------------|-----------------|---------|------------|
-| Company name | Guest's full name | Position | Date |
+- `index.html`: toan bo ung dung da duoc bundle vao mot file HTML lon.
+- `AGENTS.md`: quy tac lam viec bat buoc cho agent.
+- `README.md`: tai lieu dinh huong cho nguoi dung va agent moi.
 
-- Người được gom theo **Tên Công ty** thành từng khối.
-- Cột **Ngày tháng** dùng để lọc — chọn ngày trong panel để hiện đúng nhóm hôm đó.
+`index.html` khong phai source tach module. File nay gom:
 
----
+- Loader tu giai nen bundle luc mo trang.
+- Template HTML/CSS/JS duoc nhung trong `script type="__bundler/template"`.
+- Asset/font/script duoc nhung trong manifest base64.
+- Logic React/DC nam trong template da bundle, dac biet class `Component`.
 
-## Triển khai (GitHub Pages)
+Khi can sua logic, agent thuong can:
 
-1. Đưa `index.html` lên nhánh `main`.
-2. Vào **Settings → Pages → Source: Deploy from a branch → main / root → Save**.
-3. Đợi khoảng 1 phút, truy cập `https://<tên-github>.github.io/<tên-repo>/`.
+1. Tim trong `index.html` bang `rg` hoac dung Node de parse noi dung `__bundler/template`.
+2. Sua dung chuoi/logic lien quan, han che dung cac phan asset base64.
+3. Kiem tra lai template van parse duoc bang `JSON.parse`.
+4. Neu sua UI, mo file tren trinh duyet de xem lai khi can.
 
-> **Lưu ý:** Xuất PNG cần có mạng (tải font lần đầu để nhúng vào ảnh).
+## Cac diem logic quan trong
 
----
+- Du lieu mac dinh nam trong `defaultData()`.
+- Layout hien tai duoc chon bang `data.layout`: `old`, `standard`, hoac `vip`.
+- Du lieu luu o localStorage key `wb-data-v2`.
+- Render tab `Cu` dung danh sach tinh toan `oldCompanies`.
+- Render tab `Thuong` dung danh sach tinh toan `companies`.
+- Render tab `VIP` dung `vip.names`, `vip.guestLogo`, `vip.guestName`.
+- Nhap Excel dung SheetJS trong ham `parseWorkbook`.
+- Xuat PNG dung `html-to-image` trong `renderStagePng`.
 
-## Ghi chú kỹ thuật
+## Cach chay
 
-- Một file HTML tĩnh duy nhất — không backend, không build.
-- Dữ liệu lưu bằng `localStorage` trên máy người dùng.
-- Đọc Excel bằng [SheetJS](https://sheetjs.com/), xuất ảnh bằng [html-to-image](https://github.com/bubkoo/html-to-image).
+Mo truc tiep `index.html` bang trinh duyet. Khong can cai package.
+
+Luu y: chuc nang xuat PNG co the can mang lan dau de tai/nhung Google Fonts.
+
+## Dinh dang Excel
+
+File Excel can co hang tieu de voi cac cot tieng Viet hoac tieng Anh tuong duong:
+
+| Ten Cong ty | Ho va ten khach | Chuc vu | Vai tro | Gioi tinh | Ngay thang |
+|-------------|-----------------|---------|---------|-----------|------------|
+| Company name | Guest's full name | Position | Role | Gender | Date |
+
+Cot bat buoc: ten cong ty va ho ten khach.
+
+## Deploy GitHub Pages
+
+1. Push `index.html` len branch `main`.
+2. Vao GitHub repo `Settings -> Pages`.
+3. Chon `Deploy from a branch`, branch `main`, folder `/root`.
+4. Luu lai va doi GitHub Pages cap nhat.
+
+## Quy tac lam viec cho agent
+
+Moi phien agent moi phai doc `AGENTS.md` truoc khi sua code.
+
+Tom tat quy trinh:
+
+- Doc yeu cau va kiem tra ngu canh repo.
+- Sua dung pham vi can thiet.
+- Kiem tra lai thay doi.
+- Bao cao sau khi lam xong: da lam gi, nguyen nhan loi neu co, cach sua, da kiem tra gi.
+- Cho nguoi dung duyet.
+- Chi commit va push sau khi nguoi dung noi ro da duyet.
+
+Khong duoc tu y revert, xoa, format lai thay doi khong lien quan.
+
