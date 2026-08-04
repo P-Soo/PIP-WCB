@@ -28,7 +28,10 @@ Ung dung hien co 3 tab layout trong panel chinh sua:
 - Chon chuc vu xuong dong hoac nam cung dong.
 - Chon font, co chu va mau chu dao.
 - Chon mau rieng cho tung thanh vien.
+- Chuyen toan bo nhan sidebar giua tieng Viet va tieng Anh bang nut `VI` / `EN`; khong hien hai ngon ngu cung luc.
 - Nhap Excel va chon ngay hien thi.
+- Nhap ngay export thu cong de dat ten PNG/ZIP/snapshot dung cho lan lam viec hien tai.
+- Dan nhanh danh sach dang text: dong dau la cong ty, cac dong sau la `ten - chuc vu`; ho tro cac dau tach `-`, `:`, `–`, `—`, `|`, `->`, `=>`, `/`, `;`, `•`, tu bo so thu tu va nhan dien Mr./Ms./Mrs./ong/ba/anh/chi/co/chu.
 - Tao preview PNG va tai file ve may.
 
 ## Cau truc code hien tai
@@ -42,6 +45,7 @@ Repo hien rat gon:
 `index.html` khong phai source tach module. File nay gom:
 
 - Loader tu giai nen bundle luc mo trang.
+- Ham `redesignEditor()` trong loader sap xep lai sidebar thanh 3 khu vuc `Noi dung / Content`, `Thiet ke / Design`, `Du lieu / Data` truoc khi render template.
 - Template HTML/CSS/JS duoc nhung trong `script type="__bundler/template"`.
 - Asset/font/script duoc nhung trong manifest base64.
 - Logic React/DC nam trong template da bundle, dac biet class `Component`.
@@ -101,4 +105,3 @@ Tom tat quy trinh:
 - Chi commit va push sau khi nguoi dung noi ro da duyet.
 
 Khong duoc tu y revert, xoa, format lai thay doi khong lien quan.
-
