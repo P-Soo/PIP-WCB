@@ -32,6 +32,7 @@ Ung dung hien co 3 tab layout trong panel chinh sua:
 - Nhap Excel va chon ngay hien thi.
 - Nhap ngay export thu cong de dat ten PNG/ZIP/snapshot dung cho lan lam viec hien tai.
 - Dan nhanh danh sach dang text: dong dau la cong ty, cac dong sau la `ten - chuc vu`; ho tro cac dau tach `-`, `:`, `–`, `—`, `|`, `->`, `=>`, `/`, `;`, `•`, tu bo so thu tu va nhan dien Mr./Ms./Mrs./ong/ba/anh/chi/co/chu.
+- Khi nhap tu Excel hoac dan text, chuc vu va vai tro duoc tu dong viet hoa dau moi tu; snapshot JSON giu nguyen noi dung goc.
 - Tao preview PNG va tai file ve may.
 
 ## Cau truc code hien tai

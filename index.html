@@ -35,6 +35,14 @@ document.addEventListener('DOMContentLoaded', async function() {
   const loading = document.getElementById('__bundler_loading');
   function setStatus(msg) { if (loading) loading.textContent = msg; }
 
+  function capitalizeImportedLabel(value) {
+    return String(value == null ? '' : value)
+      .normalize('NFC')
+      .trim()
+      .replace(/(^|[^\p{L}\p{N}])(\p{L})/gu, (match, prefix, letter) => prefix + letter.toLocaleUpperCase('vi-VN'));
+  }
+  window.__wbCapitalizeImportedLabel = capitalizeImportedLabel;
+
   function parseWelcomeBoardText(input) {
     const lines = String(input || '')
       .replace(/\u00a0/g, ' ')
@@ -81,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (hyphens.length === 1) separator = { 0:hyphens[0][0], index:hyphens[0].index };
       }
       const rawName = separator ? value.slice(0, separator.index).trim() : value;
-      const position = separator ? value.slice(separator.index + separator[0].length).trim() : '';
+      const position = separator ? capitalizeImportedLabel(value.slice(separator.index + separator[0].length)) : '';
       if (!rawName) return null;
       return { gender:identified.gender, name:rawName, position, role:'' };
     }
@@ -253,6 +261,31 @@ document.addEventListener('DOMContentLoaded', async function() {
     source = source.replace(
       "editBoard: 'Edit board', oldTab: 'Old', standardTab: 'New', vipTab: 'VIP', language: 'Language',",
       "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “name - position”. You can use -, :, –, —, |, ->, =>, /, ; or •.', parseText: 'Parse & replace list',"
+    );
+    replaceOnce(
+      '  parseWorkbook(buf){',
+      "  capitalizeImportedLabel(value){\n    return String(value == null ? '' : value)\n      .normalize('NFC')\n      .trim()\n      .replace(/(^|[^\\p{L}\\p{N}])(\\p{L})/gu, (match, prefix, letter) => prefix + letter.toLocaleUpperCase('vi-VN'));\n  }\n\n  parseWorkbook(buf){",
+      'Excel capitalization helper'
+    );
+    replaceOnce(
+      "        position: cols.position != null ? String(r[cols.position] == null ? '' : r[cols.position]).trim() : '',",
+      "        position: cols.position != null ? window.__wbCapitalizeImportedLabel(r[cols.position]) : '',",
+      'legacy Excel position capitalization'
+    );
+    replaceOnce(
+      "        position: cols.position != null ? String(r[cols.position] == null ? '' : r[cols.position]).trim() : '',",
+      "        position: cols.position != null ? this.capitalizeImportedLabel(r[cols.position]) : '',",
+      'component Excel position capitalization'
+    );
+    replaceOnce(
+      "        role: cols.role != null ? String(r[cols.role] == null ? '' : r[cols.role]).trim() : '',",
+      "        role: cols.role != null ? window.__wbCapitalizeImportedLabel(r[cols.role]) : '',",
+      'legacy Excel role capitalization'
+    );
+    replaceOnce(
+      "        role: cols.role != null ? String(r[cols.role] == null ? '' : r[cols.role]).trim() : '',",
+      "        role: cols.role != null ? this.capitalizeImportedLabel(r[cols.role]) : '',",
+      'component Excel role capitalization'
     );
     source = source.replace("const avail = w - (this.state.panelOpen ? 380 : 0);", "const avail = w - (this.state.panelOpen ? 430 : 0);");
     source = source.replace("panelX: this.state.panelOpen ? '0px' : '380px',", "panelX: this.state.panelOpen ? '0px' : '430px',");
