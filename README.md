@@ -27,7 +27,9 @@ Ung dung hien co 3 tab layout trong panel chinh sua:
 - Bat/tat hien thi chuc vu va vai tro.
 - Chon chuc vu xuong dong hoac nam cung dong.
 - Chon font, co chu va mau chu dao.
-- Chon mau rieng cho tung thanh vien.
+- Chon rieng mau chu WELCOME, mau ten nguoi, mau chuc vu, mau vai tro va mau vien khung; moi o mau co bang mau nhanh va o chon mau tu do, kem nut dat lai mau mac dinh.
+- Chon mau rieng cho tung thanh vien (o layout `Cu` mau nay ap cho ten nguoi, o layout `Thuong` mau nay ap cho vien the va badge vai tro).
+- Chinh khoang cach tu header PHIL/WELCOME xuong ten cong ty dau tien va khoang cach giua cac cong ty.
 - Chuyen toan bo nhan sidebar giua tieng Viet va tieng Anh bang nut `VI` / `EN`; khong hien hai ngon ngu cung luc.
 - Nhap Excel va chon ngay hien thi.
 - Nhap ngay export thu cong de dat ten PNG/ZIP/snapshot dung cho lan lam viec hien tai.
@@ -46,7 +48,7 @@ Repo hien rat gon:
 `index.html` khong phai source tach module. File nay gom:
 
 - Loader tu giai nen bundle luc mo trang.
-- Ham `redesignEditor()` trong loader sap xep lai sidebar thanh 3 khu vuc `Noi dung / Content`, `Thiet ke / Design`, `Du lieu / Data` truoc khi render template.
+- Ham `redesignEditor()` trong loader sap xep lai sidebar thanh 3 khu vuc `Noi dung / Content`, `Thiet ke / Design`, `Du lieu / Data` truoc khi render template. Cac muc thuoc tab `Thiet ke` da mang san `data-wb-panel-view="design"` trong template, khong con bi patch tu `redesignEditor()`.
 - Template HTML/CSS/JS duoc nhung trong `script type="__bundler/template"`.
 - Asset/font/script duoc nhung trong manifest base64.
 - Logic React/DC nam trong template da bundle, dac biet class `Component`.
@@ -58,11 +60,29 @@ Khi can sua logic, agent thuong can:
 3. Kiem tra lai template van parse duoc bang `JSON.parse`.
 4. Neu sua UI, mo file tren trinh duyet de xem lai khi can.
 
+## Cau truc tab `Thiet ke`
+
+Tab `Thiet ke` gom 6 muc cha, moi muc chia tiep thanh cac nhom con:
+
+1. `Hien thi & danh sach`: nhom `Hien thi thong tin` (chuc vu / vai tro / chuc vu xuong dong) va nhom `Danh sach` (can giua danh sach, vien khung ten) - nhom sau chi hien o layout `Cu`.
+2. `Header PHIL / WELCOME`: nhom `Can header`, nhom `Co chu header` (co PHIL, co WELCOME), nhom `Khoang cach khoi` (khoang cach PHIL/WELCOME, khoang cach header xuong ten cong ty dau tien).
+3. `Kieu chu`: nhom `Kieu chu` (font, co chu tong the) va nhom `Co chu tung phan`.
+4. `Mau sac`: nhom `Mau chu dao` (bang mau + chon mau tu do), nhom `Mau chu`, nhom `Khung & vien` (mau vien + dat lai mau mac dinh).
+5. `Khoang cach & thut le`: nhom `Gian dong`, nhom `Khoang cach khoi` (giua cac cong ty, khoang cach quanh dau `-`), nhom `Thut le`.
+6. `Khung bang`: do day vien, bat/tat keo chinh kich thuoc, chieu cao khung.
+
+Cac hang chi ap cho mot layout duoc boc trong `sc-if` theo `isOld` / `isStandard`. Markup dung cac class dung chung `wb-group`, `wb-group-title`, `wb-row`, `wb-row-label`, `wb-step`, `wb-step-val`, `wb-toggle-row`, `wb-switch`, `wb-color-input`, `wb-seg`, `wb-hint` khai bao trong `<style>` cua template.
+
+Luu y khi sua: DC bo qua attribute `open` khong gia tri tren `<details>`, nen moi muc luon dong khi render lan dau; trang thai mo/dong do nguoi dung bam se duoc giu qua cac lan re-render.
+
 ## Cac diem logic quan trong
 
 - Du lieu mac dinh nam trong `defaultData()`.
 - Layout hien tai duoc chon bang `data.layout`: `old`, `standard`, hoac `vip`.
 - Du lieu luu o localStorage key `wb-data-v2`.
+- Mau sac luu o cac key `primary`, `welcomeColor`, `nameColor`, `positionColor`, `roleColor`, `frameColor`. Cac key nay deu optional; khi khong co thi lay mac dinh theo layout, nen bo qua tat ca se cho ra dung giao dien goc.
+- Mau duoc day xuong board bang CSS variable tren khung: `--pri`, `--cname`, `--cpos`, `--crole`.
+- Khoang cach khoi luu o `oldHeaderBodyGap` / `oldGroupGap` (layout `Cu`) va `stdHeaderBodyGap` / `stdGroupGap` (layout `Thuong`).
 - Render tab `Cu` dung danh sach tinh toan `oldCompanies`.
 - Render tab `Thuong` dung danh sach tinh toan `companies`.
 - Render tab `VIP` dung `vip.names`, `vip.guestLogo`, `vip.guestName`.
