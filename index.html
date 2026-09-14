@@ -49,9 +49,9 @@ document.addEventListener('DOMContentLoaded', async function() {
       .replace(/\r\n?/g, '\n')
       .normalize('NFC')
       .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean);
-    if (!lines.length) return { company:'', people:[] };
+      .map((text, index) => ({ text:text.trim(), number:index + 1 }))
+      .filter(line => line.text);
+    if (!lines.length) return { company:'', people:[], issues:[] };
 
     function stripListMarker(line) {
       let value = line.trim();
@@ -94,12 +94,125 @@ document.addEventListener('DOMContentLoaded', async function() {
       return { gender:identified.gender, name:rawName, position, role:'' };
     }
 
-    return {
-      company: lines[0],
-      people: lines.slice(1).map(splitPerson).filter(Boolean),
-    };
+    // Heuristics for input that the lenient parser would accept but load wrongly.
+    const personTitle = /^\(?(?:mr|mrs|ms|miss|ông|bà|anh|chị)\.?\)?\s/iu;
+    const companyLine = /^(?:tổng\s+công\s+ty|công\s+ty|cty|tập\s+đoàn|company|corporation)(?=\s|$|[.,:])|(?:^|\s)(?:co\.?,?\s*ltd\.?|ltd\.?|jsc|inc\.?|corp\.?|llc|tnhh|cổ\s+phần)$/iu;
+    const headerLine = /^(?:stt|tt|no\.?|#)(?:\s|[|,;]|$)|(?:họ\s*(?:và\s*)?tên|full\s*name|name).*(?:chức\s*vụ|position|title)/iu;
+    const contactInfo = /@|https?:\/\/|\d[\d .]{7,}\d/u;
+    const issues = [];
+    const addIssue = (line, code) => issues.push({ line:line ? line.number : null, text:line ? line.text : '', code });
+
+    const first = lines[0];
+    if (headerLine.test(first.text)) addIssue(first, 'header');
+    else if (stripListMarker(first.text) !== first.text || personTitle.test(first.text)) addIssue(first, 'company-looks-person');
+
+    const people = [];
+    lines.slice(1).forEach(line => {
+      if (headerLine.test(line.text)) { addIssue(line, 'header'); return; }
+      const person = splitPerson(line.text);
+      if (!person) return;
+      people.push(person);
+      if (!person.position && companyLine.test(stripListMarker(line.text))) { addIssue(line, 'extra-company'); return; }
+      if (line.text.split('\t').length > 2) addIssue(line, 'too-many-columns');
+      else if (contactInfo.test(person.name) || contactInfo.test(person.position)) addIssue(line, 'contact-info');
+      else if (!person.position) addIssue(line, 'missing-position');
+      else if (/\d|,/.test(person.name) || person.name.split(/\s+/).length > 6) addIssue(line, 'name-suspicious');
+    });
+    if (!people.length) addIssue(null, 'no-people');
+
+    return { company:first.text, people, issues };
   }
   window.__wbParseWelcomeBoardText = parseWelcomeBoardText;
+
+  const importIssueMessages = {
+    vi: {
+      'header': 'có vẻ là dòng tiêu đề cột (STT, Họ tên, Chức vụ…)',
+      'company-looks-person': 'dòng đầu phải là tên công ty (không đánh số, không danh xưng)',
+      'extra-company': 'trông giống tên công ty thứ hai — mỗi lần chỉ dán 1 công ty',
+      'too-many-columns': 'có nhiều hơn 2 cột (tên, chức vụ, …)',
+      'contact-info': 'có số điện thoại / email / link',
+      'missing-position': 'không tìm thấy chức vụ (thiếu dấu “ - ” giữa tên và chức vụ)',
+      'name-suspicious': 'họ tên chứa số, dấu phẩy hoặc quá dài — có thể bị dính cột',
+      'no-people': 'không tìm thấy nhân viên nào sau dòng tên công ty',
+    },
+    en: {
+      'header': 'looks like a column header row (No, Name, Position…)',
+      'company-looks-person': 'the first line must be the company name (no numbering, no title)',
+      'extra-company': 'looks like a second company — paste one company at a time',
+      'too-many-columns': 'has more than 2 columns (name, position, …)',
+      'contact-info': 'contains a phone number / email / link',
+      'missing-position': 'no position found (missing “ - ” between name and position)',
+      'name-suspicious': 'name contains digits, commas or is too long — columns may be merged',
+      'no-people': 'no people found after the company line',
+    },
+  };
+
+  function describeImportIssue(issue, lang) {
+    const en = lang === 'en';
+    const message = (en ? importIssueMessages.en : importIssueMessages.vi)[issue.code] || issue.code;
+    if (issue.line == null) return message;
+    return (en ? 'Line ' : 'Dòng ') + issue.line + ' “' + issue.text.slice(0, 60) + (issue.text.length > 60 ? '…' : '') + '”: ' + message;
+  }
+  window.__wbDescribeImportIssue = describeImportIssue;
+
+  function buildImportFixPrompt(raw, issues, lang) {
+    const detected = issues.slice(0, 30).map(issue => '- ' + describeImportIssue(issue, lang)).join('\n');
+    if (lang === 'en') {
+      return `You are a data-cleaning assistant. Convert the raw data below into the exact import format of my Welcome Board tool.
+
+FORMAT RULES
+1. Line 1: the company name only (keep its original spelling, no numbering).
+2. From line 2: exactly ONE person per line, as: <Title> <Full name> - <Position>
+   - Title: "Mr." or "Ms." (or "Ông"/"Bà" for Vietnamese names). Only add it when the raw data tells the gender; never guess. If unknown, leave the title out.
+   - Separate name and position with " - " (a hyphen with a space on each side).
+   - The name must not contain " - ", ":", "|", "/", ";" or "•".
+   - If there is no position, write the name only.
+3. Remove: numbering, column headers (No, Name, Position…), phone numbers, emails, notes, greetings and empty lines.
+4. Keep names and positions exactly as written; do not translate or invent information.
+5. If there are several companies, output each one as a separate block in the same format, with one empty line between blocks.
+Return only the result inside a single code block, with no explanation.
+
+EXAMPLE OUTPUT
+ABC COMPANY
+Mr. John Smith - Director
+Ms. Jane Doe - Sales Manager
+
+ISSUES DETECTED BY THE TOOL
+${detected}
+
+RAW DATA
+"""
+${raw.trim()}
+"""`;
+    }
+    return `Bạn là trợ lý chuẩn hoá dữ liệu. Hãy chuyển dữ liệu thô bên dưới sang đúng định dạng nhập của công cụ Welcome Board.
+
+QUY TẮC ĐỊNH DẠNG
+1. Dòng 1: chỉ ghi tên công ty (giữ nguyên cách viết, không đánh số).
+2. Từ dòng 2: mỗi dòng đúng MỘT người, theo dạng: <Danh xưng> <Họ tên> - <Chức vụ>
+   - Danh xưng: "Ông"/"Bà" (tên tiếng Việt) hoặc "Mr."/"Ms." (tên nước ngoài). Chỉ thêm khi dữ liệu gốc cho biết giới tính; không được đoán. Nếu không rõ thì bỏ danh xưng.
+   - Ngăn cách họ tên và chức vụ bằng " - " (dấu gạch ngang, có khoảng trắng hai bên).
+   - Họ tên không được chứa " - ", ":", "|", "/", ";" hoặc "•".
+   - Nếu không có chức vụ thì chỉ ghi họ tên.
+3. Bỏ: số thứ tự, tiêu đề cột (STT, Họ tên, Chức vụ…), số điện thoại, email, ghi chú, lời chào và dòng trống.
+4. Giữ nguyên chính tả họ tên và chức vụ; không dịch, không tự thêm thông tin.
+5. Nếu có nhiều công ty: tách mỗi công ty thành một khối riêng theo đúng định dạng trên, các khối cách nhau một dòng trống.
+Chỉ trả về kết quả trong một khối code, không giải thích.
+
+VÍ DỤ KẾT QUẢ
+CÔNG TY ABC
+Ông Nguyễn Văn A - Giám đốc
+Ms. Jane Doe - Sales Manager
+
+VẤN ĐỀ CÔNG CỤ PHÁT HIỆN
+${detected}
+
+DỮ LIỆU THÔ
+"""
+${raw.trim()}
+"""`;
+  }
+  window.__wbBuildImportFixPrompt = buildImportFixPrompt;
 
   function redesignEditor(source) {
     function replaceOnce(search, replacement, label) {
@@ -152,6 +265,12 @@ document.addEventListener('DOMContentLoaded', async function() {
   .wb-quick-text { min-height:180px; resize:vertical; line-height:1.5; }
   .wb-quick-action { width:100%; margin-top:10px; border:none; border-radius:10px; padding:11px 12px; background:#1577c2; color:#fff; cursor:pointer; font-family:'Be Vietnam Pro',sans-serif; font-size:13px; font-weight:800; box-shadow:0 6px 16px rgba(21,119,194,.2); }
   .wb-quick-status { display:none; margin-top:9px; border-radius:9px; padding:9px 10px; font-size:11px; line-height:1.45; }
+  .wb-quick-status strong { display:block; margin-bottom:5px; font-size:12px; }
+  .wb-quick-status ul { margin:0 0 7px; padding-left:16px; }
+  .wb-quick-status li { margin-bottom:3px; overflow-wrap:anywhere; }
+  .wb-quick-issue-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .wb-quick-issue-actions button { flex:1 1 140px; border:1px solid #d9a93f; border-radius:8px; padding:8px 10px; background:#fff; color:#6d4700; cursor:pointer; font-family:'Be Vietnam Pro',sans-serif; font-size:12px; font-weight:800; }
+  .wb-quick-issue-actions button.is-primary { border-color:#1577c2; background:#1577c2; color:#fff; }
   @media (max-width:720px) {
     .wb-editor-panel { width:100vw !important; }
     .wb-panel-scroll { padding-left:14px; padding-right:14px; }
@@ -287,6 +406,30 @@ document.addEventListener('DOMContentLoaded', async function() {
       function toInputDate(value){var raw=String(value||'').trim(),m=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');m=raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');return '';}
       function fromInputDate(value){var m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:'';}
       function showStatus(message,ok){var el=document.getElementById('wb-text-import-status');if(!el)return;el.textContent=message;el.style.display='block';el.style.color=ok?'#176b3a':'#a61b46';el.style.background=ok?'#edf8f1':'#fff1f5';el.style.border='1px solid '+(ok?'#ccebd7':'#f1c8d4');}
+      function showIssues(issues){
+        var el=document.getElementById('wb-text-import-status');if(!el)return;
+        var en=readData().lang==='en',lang=en?'en':'vi',max=6;
+        showStatus('',false);el.style.color='#6d4700';el.style.background='#fff8e6';el.style.border='1px solid #f0d99a';
+        var title=document.createElement('strong');
+        title.textContent=en?'The list does not match the template ('+issues.length+' issue'+(issues.length>1?'s':'')+'). Nothing was loaded yet.':'Danh sách chưa đúng mẫu ('+issues.length+' vấn đề). Chưa nạp dữ liệu.';
+        el.appendChild(title);
+        var list=document.createElement('ul');
+        issues.slice(0,max).forEach(function(issue){var li=document.createElement('li');li.textContent=window.__wbDescribeImportIssue(issue,lang);list.appendChild(li);});
+        if(issues.length>max){var more=document.createElement('li');more.textContent=en?'…and '+(issues.length-max)+' more':'…và '+(issues.length-max)+' vấn đề khác';list.appendChild(more);}
+        el.appendChild(list);
+        var hint=document.createElement('div');
+        hint.textContent=en?'Copy the prompt, paste it into an AI chat, then paste the AI’s result back into the box above.':'Bấm copy prompt, dán vào AI (ChatGPT, Claude, Gemini…), rồi dán kết quả AI trả về vào ô phía trên.';
+        el.appendChild(hint);
+        var actions=document.createElement('div');actions.className='wb-quick-issue-actions';
+        var copy=document.createElement('button');copy.type='button';copy.id='wb-copy-ai-prompt';copy.className='is-primary';copy.textContent=en?'Copy prompt for AI':'Copy prompt cho AI';
+        var force=document.createElement('button');force.type='button';force.id='wb-force-parse';force.textContent=en?'Load anyway':'Vẫn nạp dữ liệu';
+        actions.appendChild(copy);actions.appendChild(force);el.appendChild(actions);
+      }
+      function copyText(text){
+        function fallback(){var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:-1000px;opacity:0';document.body.appendChild(ta);ta.select();var ok=false;try{ok=document.execCommand('copy');}catch(e){}ta.remove();if(!ok)throw new Error('copy failed');}
+        if(navigator.clipboard&&window.isSecureContext)return navigator.clipboard.writeText(text).catch(function(){fallback();});
+        return new Promise(function(resolve){fallback();resolve();});
+      }
       function syncDateInput(){var input=document.getElementById('wb-visit-date');if(!input||document.activeElement===input)return;var next=toInputDate(readData().visitDate||'');if(input.value!==next)input.value=next;}
       function apply(){
         var panel=document.querySelector('.wb-editor-panel');if(!panel)return;
@@ -303,11 +446,27 @@ document.addEventListener('DOMContentLoaded', async function() {
       document.addEventListener('click',function(event){
         var navBtn=event.target.closest&&event.target.closest('[data-wb-panel-tab]');
         if(navBtn){active=navBtn.getAttribute('data-wb-panel-tab')||'content';window.__wbEditorSection=active;apply();var sc=document.querySelector('.wb-panel-scroll');if(sc)sc.scrollTop=0;return;}
-        var parseBtn=event.target.closest&&event.target.closest('#wb-parse-text');
+        var copyBtn=event.target.closest&&event.target.closest('#wb-copy-ai-prompt');
+        if(copyBtn){
+          var raw=(document.getElementById('wb-text-import')||{}).value||'';
+          var result=window.__wbParseWelcomeBoardText(raw);
+          var en=readData().lang==='en';
+          var prompt=window.__wbBuildImportFixPrompt(raw,result.issues,en?'en':'vi');
+          copyText(prompt).then(function(){copyBtn.textContent=en?'✓ Copied — paste it into ChatGPT / Claude / Gemini':'✓ Đã copy — dán vào ChatGPT / Claude / Gemini';},function(){
+            copyBtn.textContent=en?'Copy blocked — select the prompt below and press Ctrl+C':'Không copy tự động được — hãy chọn prompt bên dưới rồi nhấn Ctrl+C';
+            var box=document.getElementById('wb-ai-prompt-manual');
+            if(!box){box=document.createElement('textarea');box.id='wb-ai-prompt-manual';box.className='wb-inp';box.readOnly=true;box.style.cssText='width:100%;min-height:140px;margin-top:8px;font-size:11px;';copyBtn.parentNode.parentNode.appendChild(box);}
+            box.value=prompt;box.focus();box.select();
+          });
+          return;
+        }
+        var forceBtn=event.target.closest&&event.target.closest('#wb-force-parse');
+        var parseBtn=forceBtn||(event.target.closest&&event.target.closest('#wb-parse-text'));
         if(!parseBtn)return;
         var input=document.getElementById('wb-text-import');
-        var parsed=window.__wbParseWelcomeBoardText?window.__wbParseWelcomeBoardText(input&&input.value):{company:'',people:[]};
+        var parsed=window.__wbParseWelcomeBoardText?window.__wbParseWelcomeBoardText(input&&input.value):{company:'',people:[],issues:[]};
         if(!parsed.company){showStatus(readData().lang==='en'?'Put the company name on the first line.':'Vui lòng nhập tên công ty ở dòng đầu.',false);return;}
+        if(!forceBtn&&parsed.issues&&parsed.issues.length){showIssues(parsed.issues);return;}
         var companies=[{name:parsed.company,people:parsed.people}];
         if(window.__wbApplyManualCompanies)window.__wbApplyManualCompanies(companies);
         else{var data=readData();data.companies=companies;localStorage.setItem('wb-data-v2',JSON.stringify(data));location.reload();return;}
