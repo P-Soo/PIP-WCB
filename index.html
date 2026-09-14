@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
   window.__wbCapitalizeImportedLabel = capitalizeImportedLabel;
 
+  function capitalizePersonName(value) {
+    return capitalizeImportedLabel(String(value == null ? '' : value).toLocaleLowerCase('vi-VN'));
+  }
+
   function parseWelcomeBoardText(input) {
     const lines = String(input || '')
       .replace(/\u00a0/g, ' ')
@@ -89,15 +93,30 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (hyphens.length === 1) separator = { 0:hyphens[0][0], index:hyphens[0].index };
       }
       const rawName = separator ? value.slice(0, separator.index).trim() : value;
-      const position = separator ? capitalizeImportedLabel(value.slice(separator.index + separator[0].length)) : '';
       if (!rawName) return null;
-      return { gender:identified.gender, name:rawName, position, role:'' };
+      // Only "name - position - role" is supported; the rest is split by the same separator.
+      let parts = [];
+      if (separator) {
+        const rest = value.slice(separator.index + separator[0].length);
+        const token = separator[0].trim();
+        if (!token) parts = rest.split(/\t+/u);
+        else if (/^[-–—]$/u.test(token) && /\s/u.test(separator[0])) parts = (' ' + rest).split(/\s+[-–—](?=\s|$)/u);
+        else parts = rest.split(token);
+        parts = parts.map(part => part.trim());
+      }
+      return {
+        gender:identified.gender,
+        name:capitalizePersonName(rawName),
+        position:capitalizeImportedLabel(parts[0] || ''),
+        role:capitalizeImportedLabel(parts.slice(1).filter(Boolean).join(' - ')),
+        partCount:parts.length,
+      };
     }
 
     // Heuristics for input that the lenient parser would accept but load wrongly.
     const personTitle = /^\(?(?:mr|mrs|ms|miss|ông|bà|anh|chị)\.?\)?\s/iu;
     const companyLine = /^(?:tổng\s+công\s+ty|công\s+ty|cty|tập\s+đoàn|company|corporation)(?=\s|$|[.,:])|(?:^|\s)(?:co\.?,?\s*ltd\.?|ltd\.?|jsc|inc\.?|corp\.?|llc|tnhh|cổ\s+phần)$/iu;
-    const headerLine = /^(?:stt|tt|no\.?|#)(?:\s|[|,;]|$)|(?:họ\s*(?:và\s*)?tên|full\s*name|name).*(?:chức\s*vụ|position|title)/iu;
+    const headerLine = /^(?:stt|tt|no\.?|#)(?:\s|[|,;]|$)|(?:họ\s*(?:và\s*)?tên|full\s*name|name).*(?:chức\s*vụ|position|title|vai\s*trò|role)/iu;
     const contactInfo = /@|https?:\/\/|\d[\d .]{7,}\d/u;
     const issues = [];
     const addIssue = (line, code) => issues.push({ line:line ? line.number : null, text:line ? line.text : '', code });
@@ -107,20 +126,24 @@ document.addEventListener('DOMContentLoaded', async function() {
     else if (stripListMarker(first.text) !== first.text || personTitle.test(first.text)) addIssue(first, 'company-looks-person');
 
     const people = [];
+    let missingGender = 0;
     lines.slice(1).forEach(line => {
       if (headerLine.test(line.text)) { addIssue(line, 'header'); return; }
       const person = splitPerson(line.text);
       if (!person) return;
-      people.push(person);
-      if (!person.position && companyLine.test(stripListMarker(line.text))) { addIssue(line, 'extra-company'); return; }
-      if (line.text.split('\t').length > 2) addIssue(line, 'too-many-columns');
-      else if (contactInfo.test(person.name) || contactInfo.test(person.position)) addIssue(line, 'contact-info');
-      else if (!person.position) addIssue(line, 'missing-position');
-      else if (/\d|,/.test(person.name) || person.name.split(/\s+/).length > 6) addIssue(line, 'name-suspicious');
+      const { partCount, ...entry } = person;
+      people.push(entry);
+      if (!entry.position && !entry.role && companyLine.test(stripListMarker(line.text))) { addIssue(line, 'extra-company'); return; }
+      if (!entry.gender) missingGender++;
+      if (line.text.split('\t').length > 3) addIssue(line, 'too-many-columns');
+      else if (contactInfo.test(entry.name) || contactInfo.test(entry.position) || contactInfo.test(entry.role)) addIssue(line, 'contact-info');
+      else if (partCount > 2) addIssue(line, 'too-many-parts');
+      else if (/\d|,/.test(entry.name) || entry.name.split(/\s+/).length > 6) addIssue(line, entry.position || entry.role ? 'name-suspicious' : 'missing-position');
     });
     if (!people.length) addIssue(null, 'no-people');
+    if (missingGender) issues.push({ line:null, text:'', code:'missing-gender', count:missingGender });
 
-    return { company:first.text, people, issues };
+    return { company:first.text.toLocaleUpperCase('vi-VN'), people, issues };
   }
   window.__wbParseWelcomeBoardText = parseWelcomeBoardText;
 
@@ -129,53 +152,83 @@ document.addEventListener('DOMContentLoaded', async function() {
       'header': 'có vẻ là dòng tiêu đề cột (STT, Họ tên, Chức vụ…)',
       'company-looks-person': 'dòng đầu phải là tên công ty (không đánh số, không danh xưng)',
       'extra-company': 'trông giống tên công ty thứ hai — mỗi lần chỉ dán 1 công ty',
-      'too-many-columns': 'có nhiều hơn 2 cột (tên, chức vụ, …)',
+      'too-many-columns': 'có nhiều hơn 3 cột (tên, chức vụ, vai trò, …)',
       'contact-info': 'có số điện thoại / email / link',
+      'too-many-parts': 'có nhiều hơn 3 phần (tên - chức vụ - vai trò)',
       'missing-position': 'không tìm thấy chức vụ (thiếu dấu “ - ” giữa tên và chức vụ)',
       'name-suspicious': 'họ tên chứa số, dấu phẩy hoặc quá dài — có thể bị dính cột',
       'no-people': 'không tìm thấy nhân viên nào sau dòng tên công ty',
+      'missing-gender': '{count} người chưa có danh xưng (Mr./Ms.) — AI sẽ đoán giúp',
     },
     en: {
       'header': 'looks like a column header row (No, Name, Position…)',
       'company-looks-person': 'the first line must be the company name (no numbering, no title)',
       'extra-company': 'looks like a second company — paste one company at a time',
-      'too-many-columns': 'has more than 2 columns (name, position, …)',
+      'too-many-columns': 'has more than 3 columns (name, position, role, …)',
       'contact-info': 'contains a phone number / email / link',
+      'too-many-parts': 'has more than 3 parts (name - position - role)',
       'missing-position': 'no position found (missing “ - ” between name and position)',
       'name-suspicious': 'name contains digits, commas or is too long — columns may be merged',
       'no-people': 'no people found after the company line',
+      'missing-gender': '{count} people have no title (Mr./Ms.) — the AI will guess',
     },
   };
 
   function describeImportIssue(issue, lang) {
     const en = lang === 'en';
-    const message = (en ? importIssueMessages.en : importIssueMessages.vi)[issue.code] || issue.code;
+    const message = ((en ? importIssueMessages.en : importIssueMessages.vi)[issue.code] || issue.code).replace('{count}', issue.count);
     if (issue.line == null) return message;
     return (en ? 'Line ' : 'Dòng ') + issue.line + ' “' + issue.text.slice(0, 60) + (issue.text.length > 60 ? '…' : '') + '”: ' + message;
   }
   window.__wbDescribeImportIssue = describeImportIssue;
 
   function buildImportFixPrompt(raw, issues, lang) {
-    const detected = issues.slice(0, 30).map(issue => '- ' + describeImportIssue(issue, lang)).join('\n');
-    if (lang === 'en') {
+    const en = lang === 'en';
+    const detected = issues.length
+      ? issues.slice(0, 30).map(issue => '- ' + describeImportIssue(issue, lang)).join('\n')
+      : (en
+        ? '- The tool found no automatic issues, but the user thinks the result is wrong. Check the titles, capitalization and the Position / Role order carefully.'
+        : '- Công cụ không phát hiện lỗi tự động, nhưng người dùng thấy kết quả chưa đúng. Hãy kiểm tra kỹ danh xưng, cách viết hoa và thứ tự Chức vụ / Vai trò.');
+    if (en) {
       return `You are a data-cleaning assistant. Convert the raw data below into the exact import format of my Welcome Board tool.
 
-FORMAT RULES
-1. Line 1: the company name only (keep its original spelling, no numbering).
-2. From line 2: exactly ONE person per line, as: <Title> <Full name> - <Position>
-   - Title: "Mr." or "Ms." (or "Ông"/"Bà" for Vietnamese names). Only add it when the raw data tells the gender; never guess. If unknown, leave the title out.
-   - Separate name and position with " - " (a hyphen with a space on each side).
-   - The name must not contain " - ", ":", "|", "/", ";" or "•".
-   - If there is no position, write the name only.
-3. Remove: numbering, column headers (No, Name, Position…), phone numbers, emails, notes, greetings and empty lines.
-4. Keep names and positions exactly as written; do not translate or invent information.
-5. If there are several companies, output each one as a separate block in the same format, with one empty line between blocks.
-Return only the result inside a single code block, with no explanation.
+REQUIRED FORMAT
+Line 1: the company name only, IN ALL CAPS (no numbering, no extra words).
+From line 2: exactly ONE person per line, in this exact order:
+  <Title> <Full name> - <Position> - <Role>
+
+RULES
+1. Title (required for everyone, including Vietnamese names):
+   - Use only "Mr." (male) or "Ms." (female). Do NOT use Ông/Bà/Anh/Chị/Cô/Chú/Mrs./Miss.
+   - If the raw data already gives a gender or title, convert it (Ông/Anh/Chú/Male → Mr.; Bà/Chị/Cô/Female/Mrs./Miss → Ms.).
+   - If the raw data has NO gender information, guess it from the name (e.g. the Vietnamese middle name "Thị" is usually female, "Văn" usually male; foreign names by their common usage) and still add the title.
+2. Company name: ALL CAPS. Example: "Abc Company Ltd" → "ABC COMPANY LTD".
+   Full name, position and role: Capitalize Each Word (first letter of every word uppercase, the rest lowercase).
+   Example: "NGUYỄN VĂN AN" → "Nguyễn Văn An"; "sales manager" → "Sales Manager".
+   Keep abbreviations as they are: CEO, CFO, HR, IT, R&D, QA…
+3. Position and role are different things:
+   - Position: the person's job title at their company (Director, Head Of Sales, Giám Đốc…).
+   - Role: their role in this delegation or event (Delegation Leader, Member, Interpreter, Guest, Trưởng Đoàn…).
+   - Always write the position first and the role second. If the raw data puts the role before the position, swap them.
+4. Separate the parts with " - " (a hyphen with a space on each side).
+   - No role: <Title> <Full name> - <Position>
+   - No position but has a role: <Title> <Full name> - - <Role>
+   - Neither: <Title> <Full name>
+   - The name, position and role must NOT contain " - ", ":", "|", ";" or "•". If an original position contains a hyphen, replace it with a comma.
+5. Remove: numbering, column headers (No, Name, Position, Role…), phone numbers, emails, notes, greetings and empty lines.
+6. Keep the original spelling and language of names, positions and roles (only change letter case); do not translate and do not invent anything other than the title.
+7. If there are several companies, output each one as a separate block in the same format, with one empty line between blocks.
+
+HOW TO ANSWER
+- Put the result in ONE code block, with no explanation inside it.
+- Right below the code block, write one line: "Guessed genders: <list of full names>" (or "Guessed genders: none") so I can double-check.
 
 EXAMPLE OUTPUT
 ABC COMPANY
-Mr. John Smith - Director
-Ms. Jane Doe - Sales Manager
+Mr. Nguyễn Văn An - Director - Delegation Leader
+Ms. Trần Thị Bình - Chief Accountant
+Ms. Jane Doe - Sales Manager - Interpreter
+Mr. Lê Minh Châu - - Guest
 
 ISSUES DETECTED BY THE TOOL
 ${detected}
@@ -187,22 +240,43 @@ ${raw.trim()}
     }
     return `Bạn là trợ lý chuẩn hoá dữ liệu. Hãy chuyển dữ liệu thô bên dưới sang đúng định dạng nhập của công cụ Welcome Board.
 
-QUY TẮC ĐỊNH DẠNG
-1. Dòng 1: chỉ ghi tên công ty (giữ nguyên cách viết, không đánh số).
-2. Từ dòng 2: mỗi dòng đúng MỘT người, theo dạng: <Danh xưng> <Họ tên> - <Chức vụ>
-   - Danh xưng: "Ông"/"Bà" (tên tiếng Việt) hoặc "Mr."/"Ms." (tên nước ngoài). Chỉ thêm khi dữ liệu gốc cho biết giới tính; không được đoán. Nếu không rõ thì bỏ danh xưng.
-   - Ngăn cách họ tên và chức vụ bằng " - " (dấu gạch ngang, có khoảng trắng hai bên).
-   - Họ tên không được chứa " - ", ":", "|", "/", ";" hoặc "•".
-   - Nếu không có chức vụ thì chỉ ghi họ tên.
-3. Bỏ: số thứ tự, tiêu đề cột (STT, Họ tên, Chức vụ…), số điện thoại, email, ghi chú, lời chào và dòng trống.
-4. Giữ nguyên chính tả họ tên và chức vụ; không dịch, không tự thêm thông tin.
-5. Nếu có nhiều công ty: tách mỗi công ty thành một khối riêng theo đúng định dạng trên, các khối cách nhau một dòng trống.
-Chỉ trả về kết quả trong một khối code, không giải thích.
+ĐỊNH DẠNG BẮT BUỘC
+Dòng 1: chỉ ghi tên công ty, VIẾT HOA TOÀN BỘ (không đánh số, không thêm chữ).
+Từ dòng 2: mỗi dòng đúng MỘT người, theo đúng thứ tự:
+  <Danh xưng> <Họ tên> - <Chức vụ> - <Vai trò>
+
+QUY TẮC
+1. Danh xưng (bắt buộc với mọi người, kể cả tên tiếng Việt):
+   - Chỉ dùng "Mr." (nam) hoặc "Ms." (nữ). KHÔNG dùng Ông/Bà/Anh/Chị/Cô/Chú/Mrs./Miss.
+   - Nếu dữ liệu gốc đã có giới tính hoặc danh xưng (Ông/Anh/Chú/Nam → Mr.; Bà/Chị/Cô/Nữ/Mrs./Miss → Ms.) thì quy đổi theo đó.
+   - Nếu dữ liệu gốc KHÔNG có thông tin giới tính: hãy tự đoán dựa vào tên (ví dụ tên đệm "Thị" thường là nữ, "Văn" thường là nam; tên nước ngoài theo tên gọi phổ biến) và vẫn điền danh xưng.
+2. Tên công ty: VIẾT HOA TOÀN BỘ. Ví dụ: "Công ty TNHH Abc" → "CÔNG TY TNHH ABC".
+   Họ tên, chức vụ và vai trò: viết hoa kiểu Capitalize (chữ cái đầu mỗi từ viết hoa, các chữ còn lại viết thường).
+   Ví dụ: "NGUYỄN VĂN AN" → "Nguyễn Văn An"; "giám đốc kinh doanh" → "Giám Đốc Kinh Doanh".
+   Giữ nguyên các từ viết tắt: CEO, CFO, HR, IT, R&D, QA…
+3. Chức vụ và vai trò là hai thông tin khác nhau:
+   - Chức vụ: vị trí công việc tại công ty (Giám Đốc, Trưởng Phòng Kinh Doanh, Sales Manager…).
+   - Vai trò: vai trò trong đoàn hoặc sự kiện này (Trưởng Đoàn, Thành Viên, Phiên Dịch, Khách Mời, Leader, Member…).
+   - Luôn ghi chức vụ trước, vai trò sau. Nếu dữ liệu gốc ghi vai trò trước chức vụ thì đảo lại cho đúng thứ tự.
+4. Ngăn cách các phần bằng " - " (dấu gạch ngang, có khoảng trắng hai bên).
+   - Không có vai trò: <Danh xưng> <Họ tên> - <Chức vụ>
+   - Không có chức vụ nhưng có vai trò: <Danh xưng> <Họ tên> - - <Vai trò>
+   - Không có cả hai: <Danh xưng> <Họ tên>
+   - Bên trong họ tên, chức vụ, vai trò KHÔNG được chứa " - ", ":", "|", ";" hoặc "•". Nếu chức vụ gốc có dấu gạch ngang thì thay bằng dấu phẩy.
+5. Bỏ: số thứ tự, tiêu đề cột (STT, Họ Tên, Chức Vụ, Vai Trò…), số điện thoại, email, ghi chú, lời chào, dòng trống.
+6. Giữ nguyên chính tả và ngôn ngữ gốc của họ tên, chức vụ, vai trò (chỉ đổi chữ hoa/thường); không dịch, không bịa thêm thông tin nào khác ngoài danh xưng.
+7. Nếu có nhiều công ty: tách mỗi công ty thành một khối riêng theo định dạng trên, các khối cách nhau một dòng trống.
+
+CÁCH TRẢ LỜI
+- Trả kết quả trong MỘT khối code, không giải thích gì thêm bên trong.
+- Ngay dưới khối code, ghi một dòng: "Giới tính được đoán: <danh sách họ tên>" (hoặc "Giới tính được đoán: không có") để tôi kiểm tra lại.
 
 VÍ DỤ KẾT QUẢ
 CÔNG TY ABC
-Ông Nguyễn Văn A - Giám đốc
-Ms. Jane Doe - Sales Manager
+Mr. Nguyễn Văn An - Giám Đốc - Trưởng Đoàn
+Ms. Trần Thị Bình - Kế Toán Trưởng
+Ms. Jane Doe - Sales Manager - Phiên Dịch
+Mr. Lê Minh Châu - - Khách Mời
 
 VẤN ĐỀ CÔNG CỤ PHÁT HIỆN
 ${detected}
@@ -356,11 +430,11 @@ ${raw.trim()}
 
     source = source.replace(
       "editBoard: 'Chỉnh sửa bảng', oldTab: 'Cũ', standardTab: 'Mới', vipTab: 'VIP', language: 'Ngôn ngữ',",
-      "editBoard: 'Thiết lập Welcome Board', oldTab: 'Cổ điển', standardTab: 'Hiện đại', vipTab: 'VIP', language: 'Ngôn ngữ', contentTab: 'Nội dung', designTab: 'Thiết kế', dataTab: 'Dữ liệu', quickData: 'Ngày & nhập nhanh', exportDate: 'Ngày dùng khi export', exportDateHint: 'Ngày này được dùng để đặt tên PNG, ZIP và snapshot JSON. Để trống sẽ dùng ngày hiện tại.', pasteList: 'Dán danh sách công ty & nhân viên', pastePlaceholder: 'CÔNG TY ABC\\n1/ Ông Nguyễn Văn A - Giám đốc\\n2/ Ms. Trần Thị B - Sales Manager', pasteHint: 'Dòng đầu là tên công ty; các dòng sau là “tên - chức vụ”. Có thể dùng -, :, –, —, |, ->, =>, /, ; hoặc •.', parseText: 'Phân tích & thay danh sách',"
+      "editBoard: 'Thiết lập Welcome Board', oldTab: 'Cổ điển', standardTab: 'Hiện đại', vipTab: 'VIP', language: 'Ngôn ngữ', contentTab: 'Nội dung', designTab: 'Thiết kế', dataTab: 'Dữ liệu', quickData: 'Ngày & nhập nhanh', exportDate: 'Ngày dùng khi export', exportDateHint: 'Ngày này được dùng để đặt tên PNG, ZIP và snapshot JSON. Để trống sẽ dùng ngày hiện tại.', pasteList: 'Dán danh sách công ty & nhân viên', pastePlaceholder: 'CÔNG TY ABC\\n1/ Mr. Nguyễn Văn A - Giám Đốc - Trưởng Đoàn\\n2/ Ms. Trần Thị B - Sales Manager', pasteHint: 'Dòng đầu là tên công ty; các dòng sau là “Mr./Ms. Tên - Chức vụ - Vai trò” (vai trò không bắt buộc).', parseText: 'Phân tích & thay danh sách',"
     );
     source = source.replace(
       "editBoard: 'Edit board', oldTab: 'Old', standardTab: 'New', vipTab: 'VIP', language: 'Language',",
-      "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “name - position”. You can use -, :, –, —, |, ->, =>, /, ; or •.', parseText: 'Parse & replace list',"
+      "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director - Delegation Leader\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “Mr./Ms. Name - Position - Role” (role is optional).', parseText: 'Parse & replace list',"
     );
     replaceOnce(
       '  parseWorkbook(buf){',
@@ -420,10 +494,15 @@ ${raw.trim()}
         var hint=document.createElement('div');
         hint.textContent=en?'Copy the prompt, paste it into an AI chat, then paste the AI’s result back into the box above.':'Bấm copy prompt, dán vào AI (ChatGPT, Claude, Gemini…), rồi dán kết quả AI trả về vào ô phía trên.';
         el.appendChild(hint);
-        var actions=document.createElement('div');actions.className='wb-quick-issue-actions';
-        var copy=document.createElement('button');copy.type='button';copy.id='wb-copy-ai-prompt';copy.className='is-primary';copy.textContent=en?'Copy prompt for AI':'Copy prompt cho AI';
+        var actions=appendCopyPromptButton(el,en?'Copy prompt for AI':'Copy prompt cho AI');
         var force=document.createElement('button');force.type='button';force.id='wb-force-parse';force.textContent=en?'Load anyway':'Vẫn nạp dữ liệu';
-        actions.appendChild(copy);actions.appendChild(force);el.appendChild(actions);
+        actions.appendChild(force);
+      }
+      function appendCopyPromptButton(el,label){
+        var actions=document.createElement('div');actions.className='wb-quick-issue-actions';
+        var copy=document.createElement('button');copy.type='button';copy.id='wb-copy-ai-prompt';copy.className='is-primary';copy.textContent=label;
+        actions.appendChild(copy);el.appendChild(actions);
+        return actions;
       }
       function copyText(text){
         function fallback(){var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:-1000px;opacity:0';document.body.appendChild(ta);ta.select();var ok=false;try{ok=document.execCommand('copy');}catch(e){}ta.remove();if(!ok)throw new Error('copy failed');}
@@ -470,7 +549,10 @@ ${raw.trim()}
         var companies=[{name:parsed.company,people:parsed.people}];
         if(window.__wbApplyManualCompanies)window.__wbApplyManualCompanies(companies);
         else{var data=readData();data.companies=companies;localStorage.setItem('wb-data-v2',JSON.stringify(data));location.reload();return;}
-        showStatus(readData().lang==='en'?'Loaded '+parsed.people.length+' people.':'Đã nạp '+parsed.people.length+' nhân viên.',true);
+        var loadedEn=readData().lang==='en';
+        showStatus(loadedEn?'Loaded '+parsed.people.length+' people.':'Đã nạp '+parsed.people.length+' nhân viên.',true);
+        var statusEl=document.getElementById('wb-text-import-status');
+        if(statusEl)appendCopyPromptButton(statusEl,loadedEn?'Result not right? Copy prompt for AI':'Kết quả chưa đúng? Copy prompt cho AI');
         active='content';window.__wbEditorSection=active;requestAnimationFrame(function(){apply();var sc=document.querySelector('.wb-panel-scroll');if(sc)sc.scrollTop=0;});
       });
       document.addEventListener('change',function(event){
