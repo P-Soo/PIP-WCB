@@ -548,12 +548,6 @@ ${raw.trim()}
           <input id="wb-visit-date" class="wb-inp" type="date">
           <div class="wb-quick-hint">{{ label.exportDateHint }}</div>
           <div class="wb-quick-divider"></div>
-          <label class="wb-quick-label" for="wb-docx-import">{{ label.openDocx }}</label>
-          <input id="wb-docx-import" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
-          <button id="wb-open-docx" type="button" class="wb-quick-action" style="margin-top:0">{{ label.openDocxButton }}</button>
-          <div class="wb-quick-hint">{{ label.openDocxHint }}</div>
-          <div id="wb-docx-status" class="wb-quick-status"></div>
-          <div class="wb-quick-divider"></div>
           <label class="wb-quick-label" for="wb-text-import">{{ label.pasteList }}</label>
           <textarea id="wb-text-import" class="wb-inp wb-quick-text" placeholder="{{ label.pastePlaceholder }}"></textarea>
           <div class="wb-quick-hint">{{ label.pasteHint }}</div>
@@ -570,6 +564,16 @@ ${raw.trim()}
       '<div class="wb-section">\n        <div style="padding:12px 14px; font-size:13px; font-weight:700; color:#15171a; background:#f8fafc; border-bottom:1px solid #eef1f4;">{{ label.importExcel }}</div>',
       '<div class="wb-section" data-wb-panel-view="data">\n        <div style="padding:12px 14px; font-size:13px; font-weight:700; color:#15171a; background:#f8fafc; border-bottom:1px solid #eef1f4;">{{ label.importExcel }}</div>',
       'data import section'
+    );
+    source = source.replace("importExcel: 'Nhập từ Excel'", "importExcel: 'Nhập từ file'");
+    source = source.replace("importExcel: 'Import from Excel'", "importExcel: 'Import from file'");
+    replaceOnce(
+      '{{ label.openSnapshot }}</button>',
+      `{{ label.openSnapshot }}</button>
+        <input id="wb-docx-import" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
+        <button id="wb-open-docx" type="button" title="{{ label.openDocxHint }}" style="width:100%; border:1px solid #b9c4cf; background:#fff; color:#15171a; cursor:pointer; padding:10px; border-radius:9px; font-size:13px; font-weight:600; font-family:'Be Vietnam Pro',sans-serif; margin-top:8px;">{{ label.openDocxButton }}</button>
+        <div id="wb-docx-status" class="wb-quick-status"></div>`,
+      'Word import button'
     );
     replaceOnce(
       '<div class="wb-section">\n        <div style="padding:12px 14px; font-size:13px; font-weight:700; color:#15171a; background:#f8fafc; border-bottom:1px solid #eef1f4;">{{ label.companyList }}</div>',
@@ -590,11 +594,11 @@ ${raw.trim()}
 
     source = source.replace(
       "editBoard: 'Chỉnh sửa bảng', oldTab: 'Cũ', standardTab: 'Mới', vipTab: 'VIP', language: 'Ngôn ngữ',",
-      "editBoard: 'Thiết lập Welcome Board', oldTab: 'Cổ điển', standardTab: 'Hiện đại', vipTab: 'VIP', language: 'Ngôn ngữ', contentTab: 'Nội dung', designTab: 'Thiết kế', dataTab: 'Dữ liệu', quickData: 'Ngày & nhập nhanh', exportDate: 'Ngày dùng khi export', exportDateHint: 'Ngày này được dùng để đặt tên PNG, ZIP và snapshot JSON. Để trống sẽ dùng ngày hiện tại.', openDocx: 'Mở lại file Word', openDocxButton: 'Chọn file Word (.docx)', openDocxHint: 'Đọc file Word do tool xuất (kể cả đã sửa chữ trong Word) và nạp lại công ty, nhân viên, chức vụ, vai trò. Thiết kế giữ nguyên như hiện tại.',pasteList: 'Dán danh sách công ty & nhân viên', pastePlaceholder: 'CÔNG TY ABC\\n1/ Mr. Nguyễn Văn A - Giám Đốc - Trưởng Đoàn\\n2/ Ms. Trần Thị B - Sales Manager', pasteHint: 'Dòng đầu là tên công ty; các dòng sau là “Mr./Ms. Tên - Chức vụ - Vai trò” (vai trò không bắt buộc).', parseText: 'Phân tích & thay danh sách',"
+      "editBoard: 'Thiết lập Welcome Board', oldTab: 'Cổ điển', standardTab: 'Hiện đại', vipTab: 'VIP', language: 'Ngôn ngữ', contentTab: 'Nội dung', designTab: 'Thiết kế', dataTab: 'Dữ liệu', quickData: 'Ngày & nhập nhanh', exportDate: 'Ngày dùng khi export', exportDateHint: 'Ngày này được dùng để đặt tên PNG, ZIP và snapshot JSON. Để trống sẽ dùng ngày hiện tại.', openDocxButton: '📝 Mở file Word…', openDocxHint: 'Đọc file Word do tool xuất (kể cả đã sửa chữ trong Word) và nạp lại công ty, nhân viên, chức vụ, vai trò. Thiết kế giữ nguyên như hiện tại.',pasteList: 'Dán danh sách công ty & nhân viên', pastePlaceholder: 'CÔNG TY ABC\\n1/ Mr. Nguyễn Văn A - Giám Đốc - Trưởng Đoàn\\n2/ Ms. Trần Thị B - Sales Manager', pasteHint: 'Dòng đầu là tên công ty; các dòng sau là “Mr./Ms. Tên - Chức vụ - Vai trò” (vai trò không bắt buộc).', parseText: 'Phân tích & thay danh sách',"
     );
     source = source.replace(
       "editBoard: 'Edit board', oldTab: 'Old', standardTab: 'New', vipTab: 'VIP', language: 'Language',",
-      "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', openDocx: 'Reopen a Word file', openDocxButton: 'Choose Word file (.docx)', openDocxHint: 'Reads a Word file exported by this tool (even after editing text in Word) and reloads companies, people, positions and roles. The current design is kept.',pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director - Delegation Leader\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “Mr./Ms. Name - Position - Role” (role is optional).', parseText: 'Parse & replace list',"
+      "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', openDocxButton: '📝 Open Word file…', openDocxHint: 'Reads a Word file exported by this tool (even after editing text in Word) and reloads companies, people, positions and roles. The current design is kept.',pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director - Delegation Leader\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “Mr./Ms. Name - Position - Role” (role is optional).', parseText: 'Parse & replace list',"
     );
     replaceOnce(
       '  parseWorkbook(buf){',
