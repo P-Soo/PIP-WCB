@@ -480,10 +480,10 @@ ${raw.trim()}
   .wb-editor-panel .wb-section { margin-bottom:14px; border-color:#dfe6ed; border-radius:13px; box-shadow:0 3px 12px rgba(20,41,75,.045); }
   .wb-editor-panel .wb-section > summary { min-height:44px; padding:13px 15px; background:#fff; color:#23384f; display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .wb-editor-panel .wb-section > summary { cursor:pointer; }
-  /* SVG icons spell viewBox as view%42ox: the template engine rewrites the literal attribute name. */
-  .wb-editor-panel .wb-section > summary::after { content:''; display:block; float:none; flex:none; width:28px; height:28px; border-radius:50%; border:1px solid #d6e4f1; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' view%42ox='0 0 24 24' fill='none' stroke='%231577c2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 14px 14px no-repeat; box-shadow:0 1px 3px rgba(20,41,75,.08); transition:transform .22s ease, background-color .16s ease, border-color .16s ease; }
-  .wb-editor-panel .wb-section > summary:hover::after { border-color:#9fc4e2; background-color:#eef5fb; }
-  .wb-editor-panel .wb-section[open] > summary::after { transform:rotate(180deg); border-color:#1577c2; background-color:#1577c2; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' view%42ox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); box-shadow:0 3px 8px rgba(21,119,194,.25); }
+  /* Pill toggle: grows when open and the plus collapses into a minus. */
+  .wb-editor-panel .wb-section > summary::after { content:''; display:block; float:none; flex:none; width:34px; height:22px; border-radius:999px; background:linear-gradient(#1577c2,#1577c2) center / 12px 2px no-repeat, linear-gradient(#1577c2,#1577c2) center / 2px 12px no-repeat, #e6f1fb; transition:width .45s cubic-bezier(.34,1.56,.64,1), background-size .45s cubic-bezier(.34,1.56,.64,1), background-color .2s ease; }
+  .wb-editor-panel .wb-section > summary:hover::after { background-color:#d3e6f7; }
+  .wb-editor-panel .wb-section[open] > summary::after { width:44px; background:linear-gradient(#fff,#fff) center / 12px 2px no-repeat, linear-gradient(#fff,#fff) center / 2px 0 no-repeat, #1577c2; }
   .wb-editor-panel .wb-section-body { padding:15px; }
   .wb-editor-panel .company-card { background:#fff; border-color:#dfe6ed; }
   .wb-editor-panel .add-company-btn { position:sticky; bottom:0; box-shadow:0 8px 20px rgba(21,119,194,.24); }
