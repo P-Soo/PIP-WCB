@@ -288,6 +288,160 @@ ${raw.trim()}
   }
   window.__wbBuildImportFixPrompt = buildImportFixPrompt;
 
+  // Reads one entry of a zip (.docx) — stored entries from our exporter, deflated ones from Word.
+  async function readZipText(buffer, entryName) {
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    let eocd = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+      if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('not-zip');
+    let offset = view.getUint32(eocd + 16, true);
+    const count = view.getUint16(eocd + 10, true);
+    for (let i = 0; i < count && view.getUint32(offset, true) === 0x02014b50; i++) {
+      const method = view.getUint16(offset + 10, true);
+      const size = view.getUint32(offset + 20, true);
+      const nameLength = view.getUint16(offset + 28, true);
+      const skip = nameLength + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true);
+      const local = view.getUint32(offset + 42, true);
+      const name = new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameLength));
+      offset += 46 + skip;
+      if (name !== entryName) continue;
+      const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      const data = bytes.slice(start, start + size);
+      if (method === 0) return new TextDecoder().decode(data);
+      if (method !== 8) throw new Error('unsupported-zip');
+      if (typeof DecompressionStream === 'function') {
+        const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+      }
+      if (window.XLSX && XLSX.CFB) {
+        const entry = XLSX.CFB.find(XLSX.CFB.read(bytes, { type:'array' }), entryName);
+        if (entry) return new TextDecoder().decode(entry.content);
+      }
+      throw new Error('unsupported-zip');
+    }
+    return null;
+  }
+
+  // Turns a Word file exported by the board back into data. Falls back to plain
+  // text (for the paste box) when the file does not have the exported structure.
+  async function readWelcomeBoardDocx(buffer, fileName) {
+    const xml = await readZipText(buffer, 'word/document.xml');
+    if (!xml) throw new Error('not-docx');
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('bad-xml');
+
+    const kids = (el, name) => Array.from(el.children).filter(child => child.localName === name);
+    const inFallback = el => { for (let n = el.parentElement; n; n = n.parentElement) if (n.localName === 'Fallback') return true; return false; };
+    const cleanLines = text => text.split('\n').map(line => line.replace(/[ \t ]+/g, ' ').trim()).filter(Boolean).join('\n');
+    const textOf = el => {
+      let out = '';
+      (function walk(node) {
+        for (const child of node.children) {
+          const n = child.localName;
+          if (n === 't') out += child.textContent;
+          else if (n === 'br' || n === 'cr') out += '\n';
+          else if (n === 'tab') out += ' ';
+          else if (n !== 'Fallback' && n !== 'delText' && n !== 'instrText') walk(child);
+        }
+      })(el);
+      return cleanLines(out);
+    };
+    const cellParas = tc => kids(tc, 'p').map(textOf).filter(Boolean);
+    const cellText = tc => cellParas(tc).join('\n');
+    const runSize = el => { const sz = el.getElementsByTagNameNS('*', 'sz')[0]; return sz ? Number(sz.getAttribute('w:val')) || 0 : 0; };
+    const splitLabel = label => {
+      const m = String(label || '').match(/^(mr|ms|mrs|miss)\.?\s+(.+)$/isu);
+      if (!m) return { gender:'', name:String(label || '').trim() };
+      return { gender:m[1].toLowerCase() === 'mr' ? 'M' : 'F', name:m[2].replace(/\n/g, ' ').trim() };
+    };
+
+    const body = doc.getElementsByTagNameNS('*', 'body')[0];
+    const container = Array.from(doc.getElementsByTagNameNS('*', 'txbxContent')).find(el => !inFallback(el)) || body;
+    if (!container) throw new Error('bad-xml');
+    const blocks = Array.from(container.children).filter(el => (el.localName === 'p' && textOf(el)) || el.localName === 'tbl');
+    const hasBrand = el => el && el.localName === 'tbl' && /PHIL/.test(textOf(el)) && /INTER PHARMA/.test(textOf(el));
+    const dateMatch = String(fileName || '').match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+    const visitDate = dateMatch ? dateMatch[3] + '/' + dateMatch[2] + '/' + dateMatch[1] : '';
+    let board = null;
+
+    if (blocks[0] && blocks[0].localName === 'p' && textOf(blocks[0]) === 'WELCOME' && blocks.slice(1).some(hasBrand)) {
+      const names = [];
+      let guestName = '';
+      blocks.slice(1).forEach(el => {
+        if (el.localName === 'p') names.push({ name:textOf(el).replace(/\n/g, ' ') });
+        else if (hasBrand(el)) { const tc = el.getElementsByTagNameNS('*', 'tc')[0]; guestName = tc ? cellText(tc).replace(/\n/g, ' ') : ''; }
+      });
+      board = { layout:'vip', vip:{ names, guestName }, count:names.length };
+    } else if (hasBrand(blocks[0]) && /WELCOME/.test(textOf(blocks[0]))) {
+      const companies = [];
+      let current = null, standard = false, old = false;
+      blocks.slice(1).forEach(el => {
+        if (el.localName === 'p') {
+          current = { name:textOf(el).replace(/\n/g, ' '), people:[] };
+          companies.push(current);
+          if (el.getElementsByTagNameNS('*', 'caps').length) old = true;
+          return;
+        }
+        const rows = kids(el, 'tr').map(tr => kids(tr, 'tc')).filter(cells => cells.length);
+        if (!rows.length) return;
+        if (!current) { current = { name:'', people:[] }; companies.push(current); }
+        if (rows.every(cells => cells.length >= 2 && !cellParas(cells[0]).length)) {
+          // Modern layout: [accent bar] [name + position] [role]
+          standard = true;
+          rows.forEach(cells => {
+            const paras = cellParas(cells[1]);
+            if (!paras.length) return;
+            current.people.push({ ...splitLabel(paras[0]), position:paras.slice(1).join('\n'), role:cells[2] ? cellText(cells[2]) : '' });
+          });
+          return;
+        }
+        // Classic layout: [name (+ position)] or [name] [-] [position|role] or [name] [-] [position] [-] [role]
+        old = true;
+        const stacked = rows.some(cells => cellParas(cells[0]).length > 1);
+        const sample = rows.find(cells => cells[2] && cellText(cells[2]));
+        const thirdIsRole = stacked || (sample && runSize(sample[2]) >= runSize(sample[0]) * 0.9);
+        rows.forEach(cells => {
+          const paras = cellParas(cells[0]);
+          if (!paras.length) return;
+          const person = { ...splitLabel(paras[0]), position:paras.slice(1).join('\n'), role:'' };
+          if (cells.length >= 5) { person.position = cellText(cells[2]); person.role = cellText(cells[4]); }
+          else if (cells.length >= 3) { if (thirdIsRole) person.role = cellText(cells[2]); else person.position = cellText(cells[2]); }
+          current.people.push(person);
+        });
+      });
+      const people = companies.reduce((all, c) => all.concat(c.people), []);
+      if (companies.length) {
+        board = { companies, count:people.length };
+        if (standard !== old) board.layout = standard ? 'standard' : 'old';
+        if (people.some(p => p.position)) board.showPosition = true;
+        if (people.some(p => p.role)) board.showRole = true;
+      }
+    }
+    if (board) {
+      if (visitDate) board.visitDate = visitDate;
+      return { board };
+    }
+
+    // Unknown structure: collect paragraphs and table rows as "cell - cell - cell" lines.
+    const lines = [];
+    (function collect(node) {
+      for (const el of node.children) {
+        if (el.localName === 'p') { const text = textOf(el); if (text) lines.push(...text.split('\n')); }
+        else if (el.localName === 'tbl') {
+          kids(el, 'tr').forEach(tr => {
+            const parts = kids(tr, 'tc').map(tc => cellText(tc).replace(/\n/g, ' ')).filter(text => text && text !== '-');
+            if (parts.length) lines.push(parts.join(' - '));
+          });
+        } else if (el.localName !== 'sectPr') collect(el);
+      }
+    })(container);
+    return { text:lines.join('\n') };
+  }
+  window.__wbReadWelcomeBoardDocx = readWelcomeBoardDocx;
+
   function redesignEditor(source) {
     function replaceOnce(search, replacement, label) {
       if (!source.includes(search)) {
@@ -394,6 +548,12 @@ ${raw.trim()}
           <input id="wb-visit-date" class="wb-inp" type="date">
           <div class="wb-quick-hint">{{ label.exportDateHint }}</div>
           <div class="wb-quick-divider"></div>
+          <label class="wb-quick-label" for="wb-docx-import">{{ label.openDocx }}</label>
+          <input id="wb-docx-import" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
+          <button id="wb-open-docx" type="button" class="wb-quick-action" style="margin-top:0">{{ label.openDocxButton }}</button>
+          <div class="wb-quick-hint">{{ label.openDocxHint }}</div>
+          <div id="wb-docx-status" class="wb-quick-status"></div>
+          <div class="wb-quick-divider"></div>
           <label class="wb-quick-label" for="wb-text-import">{{ label.pasteList }}</label>
           <textarea id="wb-text-import" class="wb-inp wb-quick-text" placeholder="{{ label.pastePlaceholder }}"></textarea>
           <div class="wb-quick-hint">{{ label.pasteHint }}</div>
@@ -430,11 +590,11 @@ ${raw.trim()}
 
     source = source.replace(
       "editBoard: 'Chỉnh sửa bảng', oldTab: 'Cũ', standardTab: 'Mới', vipTab: 'VIP', language: 'Ngôn ngữ',",
-      "editBoard: 'Thiết lập Welcome Board', oldTab: 'Cổ điển', standardTab: 'Hiện đại', vipTab: 'VIP', language: 'Ngôn ngữ', contentTab: 'Nội dung', designTab: 'Thiết kế', dataTab: 'Dữ liệu', quickData: 'Ngày & nhập nhanh', exportDate: 'Ngày dùng khi export', exportDateHint: 'Ngày này được dùng để đặt tên PNG, ZIP và snapshot JSON. Để trống sẽ dùng ngày hiện tại.', pasteList: 'Dán danh sách công ty & nhân viên', pastePlaceholder: 'CÔNG TY ABC\\n1/ Mr. Nguyễn Văn A - Giám Đốc - Trưởng Đoàn\\n2/ Ms. Trần Thị B - Sales Manager', pasteHint: 'Dòng đầu là tên công ty; các dòng sau là “Mr./Ms. Tên - Chức vụ - Vai trò” (vai trò không bắt buộc).', parseText: 'Phân tích & thay danh sách',"
+      "editBoard: 'Thiết lập Welcome Board', oldTab: 'Cổ điển', standardTab: 'Hiện đại', vipTab: 'VIP', language: 'Ngôn ngữ', contentTab: 'Nội dung', designTab: 'Thiết kế', dataTab: 'Dữ liệu', quickData: 'Ngày & nhập nhanh', exportDate: 'Ngày dùng khi export', exportDateHint: 'Ngày này được dùng để đặt tên PNG, ZIP và snapshot JSON. Để trống sẽ dùng ngày hiện tại.', openDocx: 'Mở lại file Word', openDocxButton: 'Chọn file Word (.docx)', openDocxHint: 'Đọc file Word do tool xuất (kể cả đã sửa chữ trong Word) và nạp lại công ty, nhân viên, chức vụ, vai trò. Thiết kế giữ nguyên như hiện tại.',pasteList: 'Dán danh sách công ty & nhân viên', pastePlaceholder: 'CÔNG TY ABC\\n1/ Mr. Nguyễn Văn A - Giám Đốc - Trưởng Đoàn\\n2/ Ms. Trần Thị B - Sales Manager', pasteHint: 'Dòng đầu là tên công ty; các dòng sau là “Mr./Ms. Tên - Chức vụ - Vai trò” (vai trò không bắt buộc).', parseText: 'Phân tích & thay danh sách',"
     );
     source = source.replace(
       "editBoard: 'Edit board', oldTab: 'Old', standardTab: 'New', vipTab: 'VIP', language: 'Language',",
-      "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director - Delegation Leader\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “Mr./Ms. Name - Position - Role” (role is optional).', parseText: 'Parse & replace list',"
+      "editBoard: 'Welcome Board settings', oldTab: 'Classic', standardTab: 'Modern', vipTab: 'VIP', language: 'Language', contentTab: 'Content', designTab: 'Design', dataTab: 'Data', quickData: 'Date & quick paste', exportDate: 'Export date', exportDateHint: 'This date is used in PNG, ZIP and snapshot filenames. Leave blank to use today.', openDocx: 'Reopen a Word file', openDocxButton: 'Choose Word file (.docx)', openDocxHint: 'Reads a Word file exported by this tool (even after editing text in Word) and reloads companies, people, positions and roles. The current design is kept.',pasteList: 'Paste company & people', pastePlaceholder: 'COMPANY ABC\\n1/ Mr. John Smith - Director - Delegation Leader\\n2/ Ms. Jane Doe - Sales Manager', pasteHint: 'First line is the company; following lines are “Mr./Ms. Name - Position - Role” (role is optional).', parseText: 'Parse & replace list',"
     );
     replaceOnce(
       '  parseWorkbook(buf){',
@@ -467,11 +627,11 @@ ${raw.trim()}
     source = source.replace("actionRight: this.state.panelOpen ? '402px' : '22px',", "actionRight: this.state.panelOpen ? '452px' : '22px',");
     source = source.replace(
       "    window.__wbLoadSnapshotFile = (e) => this.loadSnapshotFile(e);",
-      "    window.__wbLoadSnapshotFile = (e) => this.loadSnapshotFile(e);\n    window.__wbSetVisitDate = (date) => this.mut(d => { if (date) d.visitDate = date; else delete d.visitDate; });\n    window.__wbApplyManualCompanies = (companies) => { let next; try { next = JSON.parse(localStorage.getItem('wb-data-v2') || 'null'); } catch(e) {} if (!next || !Array.isArray(next.companies)) next = JSON.parse(JSON.stringify(this.state.data)); next.companies = companies; next.showPosition = true; this.save(next); this.setState({ collapsedCompanies:{}, importedRows:null, importDates:[], importDate:'' }); };"
+      "    window.__wbLoadSnapshotFile = (e) => this.loadSnapshotFile(e);\n    window.__wbSetVisitDate = (date) => this.mut(d => { if (date) d.visitDate = date; else delete d.visitDate; });\n    window.__wbApplyManualCompanies = (companies) => { let next; try { next = JSON.parse(localStorage.getItem('wb-data-v2') || 'null'); } catch(e) {} if (!next || !Array.isArray(next.companies)) next = JSON.parse(JSON.stringify(this.state.data)); next.companies = companies; next.showPosition = true; this.save(next); this.setState({ collapsedCompanies:{}, importedRows:null, importDates:[], importDate:'' }); };\n    window.__wbApplyImportedBoard = (patch) => { let next; try { next = JSON.parse(localStorage.getItem('wb-data-v2') || 'null'); } catch(e) {} if (!next || !Array.isArray(next.companies)) next = JSON.parse(JSON.stringify(this.state.data)); Object.assign(next, patch); this.save(next); this.setState({ collapsedCompanies:{}, importedRows:null, importDates:[], importDate:'' }); };"
     );
     source = source.replace(
       "    if (window.__wbLoadSnapshotFile) delete window.__wbLoadSnapshotFile;",
-      "    if (window.__wbLoadSnapshotFile) delete window.__wbLoadSnapshotFile;\n    if (window.__wbSetVisitDate) delete window.__wbSetVisitDate;\n    if (window.__wbApplyManualCompanies) delete window.__wbApplyManualCompanies;"
+      "    if (window.__wbLoadSnapshotFile) delete window.__wbLoadSnapshotFile;\n    if (window.__wbSetVisitDate) delete window.__wbSetVisitDate;\n    if (window.__wbApplyManualCompanies) delete window.__wbApplyManualCompanies;\n    if (window.__wbApplyImportedBoard) delete window.__wbApplyImportedBoard;"
     );
 
     const editorBehavior = String.raw`<script>(function(){
@@ -479,7 +639,7 @@ ${raw.trim()}
       function readData(){try{return JSON.parse(localStorage.getItem('wb-data-v2')||'{}')||{};}catch(e){return {};}}
       function toInputDate(value){var raw=String(value||'').trim(),m=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');m=raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');return '';}
       function fromInputDate(value){var m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:'';}
-      function showStatus(message,ok){var el=document.getElementById('wb-text-import-status');if(!el)return;el.textContent=message;el.style.display='block';el.style.color=ok?'#176b3a':'#a61b46';el.style.background=ok?'#edf8f1':'#fff1f5';el.style.border='1px solid '+(ok?'#ccebd7':'#f1c8d4');}
+      function showStatus(message,ok,id){var el=document.getElementById(id||'wb-text-import-status');if(!el)return;el.textContent=message;el.style.display='block';el.style.color=ok?'#176b3a':'#a61b46';el.style.background=ok?'#edf8f1':'#fff1f5';el.style.border='1px solid '+(ok?'#ccebd7':'#f1c8d4');}
       function showIssues(issues){
         var el=document.getElementById('wb-text-import-status');if(!el)return;
         var en=readData().lang==='en',lang=en?'en':'vi',max=6;
@@ -525,6 +685,7 @@ ${raw.trim()}
       document.addEventListener('click',function(event){
         var navBtn=event.target.closest&&event.target.closest('[data-wb-panel-tab]');
         if(navBtn){active=navBtn.getAttribute('data-wb-panel-tab')||'content';window.__wbEditorSection=active;apply();var sc=document.querySelector('.wb-panel-scroll');if(sc)sc.scrollTop=0;return;}
+        if(event.target.closest&&event.target.closest('#wb-open-docx')){var docxInput=document.getElementById('wb-docx-import');if(docxInput)docxInput.click();return;}
         var copyBtn=event.target.closest&&event.target.closest('#wb-copy-ai-prompt');
         if(copyBtn){
           var raw=(document.getElementById('wb-text-import')||{}).value||'';
@@ -555,7 +716,31 @@ ${raw.trim()}
         if(statusEl)appendCopyPromptButton(statusEl,loadedEn?'Result not right? Copy prompt for AI':'Kết quả chưa đúng? Copy prompt cho AI');
         active='content';window.__wbEditorSection=active;requestAnimationFrame(function(){apply();var sc=document.querySelector('.wb-panel-scroll');if(sc)sc.scrollTop=0;});
       });
+      function importDocx(file){
+        var en=readData().lang==='en';
+        if(!file)return;
+        if(!/\.docx$/i.test(file.name)){showStatus(en?'Please choose a .docx file (old .doc files are not supported).':'Vui lòng chọn file .docx (không hỗ trợ file .doc cũ).',false,'wb-docx-status');return;}
+        showStatus(en?'Reading '+file.name+'…':'Đang đọc '+file.name+'…',true,'wb-docx-status');
+        file.arrayBuffer().then(function(buf){return window.__wbReadWelcomeBoardDocx(buf,file.name);}).then(function(result){
+          if(result.board){
+            var patch=Object.assign({},result.board),count=patch.count;delete patch.count;
+            if(patch.vip){var oldVip=readData().vip||{};if(!patch.vip.guestName)patch.vip.guestLogo=oldVip.guestLogo||'';else patch.vip.guestLogo='';}
+            if(window.__wbApplyImportedBoard)window.__wbApplyImportedBoard(patch);
+            else{var data=readData();Object.assign(data,patch);localStorage.setItem('wb-data-v2',JSON.stringify(data));location.reload();return;}
+            var msg=patch.layout==='vip'?(en?'Loaded Word file (VIP): '+count+' guest name(s).':'Đã nạp file Word (VIP): '+count+' tên khách.'):(en?'Loaded Word file: '+patch.companies.length+' company(ies), '+count+' people.':'Đã nạp file Word: '+patch.companies.length+' công ty, '+count+' người.');
+            showStatus(msg,true,'wb-docx-status');
+            return;
+          }
+          var input=document.getElementById('wb-text-import');
+          if(input){input.value=result.text;input.focus();}
+          showStatus(en?'This Word file was not exported by the tool, so its text was put into the paste box below. Check it and press “Parse”.':'File Word này không phải do tool xuất nên chưa nạp được trực tiếp. Nội dung đã được đổ vào ô dán bên dưới — hãy kiểm tra rồi bấm Phân tích.',false,'wb-docx-status');
+        }).catch(function(err){
+          console.error('[docx import]',err);
+          showStatus(en?'Could not read this Word file.':'Không đọc được file Word này.',false,'wb-docx-status');
+        });
+      }
       document.addEventListener('change',function(event){
+        if(event.target&&event.target.id==='wb-docx-import'){var file=event.target.files&&event.target.files[0];event.target.value='';importDocx(file);return;}
         if(!event.target||event.target.id!=='wb-visit-date')return;
         var date=fromInputDate(event.target.value);
         if(window.__wbSetVisitDate)window.__wbSetVisitDate(date);
