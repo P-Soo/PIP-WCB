@@ -27,11 +27,13 @@ Ung dung hien co 3 tab layout trong panel chinh sua:
 - Bat/tat hien thi chuc vu va vai tro.
 - Chon chuc vu xuong dong hoac nam cung dong.
 - Chon font, co chu va mau chu dao. Danh sach font co them `Malgun Gothic` va `Noto Sans KR` de hien thi tieng Han dong bo voi chu Latin.
+- Can rieng ca cum logo + WELCOME va rieng dong WELCOME; khi can rieng, ben trai tra ve vi tri sat logo, o giua nam dung tam khung va ben phai nam sat mep doi dien logo. Dong WELCOME co font doc lap voi noi dung cong ty/nhan vien ben duoi.
 - Chon rieng mau chu WELCOME, mau ten nguoi, mau chuc vu, mau vai tro va mau vien khung; moi o mau co bang mau nhanh va o chon mau tu do, kem nut dat lai mau mac dinh.
 - Chon mau rieng cho tung thanh vien (o layout `Cu` mau nay ap cho ten nguoi, o layout `Thuong` mau nay ap cho vien the va badge vai tro).
 - Chinh khoang cach tu header PHIL/WELCOME xuong ten cong ty dau tien va khoang cach giua cac cong ty.
+- Layout Cu tu do cot ten theo noi dung dai nhat cua toan danh sach, dong bo cac cot giua cac cong ty. Dieu khien khoang cach hai ben dau `-` la dem moi ben (mac dinh 24px, buoc 4px), khong con la do rong ca o dau gach. Tu an khi khong co dau phan cach (vi du chi hien chuc vu xuong dong, khong co vai tro).
 - Chuyen toan bo nhan sidebar giua tieng Viet va tieng Anh bang nut `VI` / `EN`; khong hien hai ngon ngu cung luc.
-- Nhap Excel va chon ngay hien thi.
+- Nhap Excel va chon ngay hien thi. Danh sach ngay duoc loai trung va sap tu moi den cu theo ngay thuc te; moi lan nhap tu chon ngay hop le moi nhat, khong phu thuoc vi tri dong trong Excel. Ngay khong hop le nam cuoi; neu khong co ngay hop le thi giu cach chon ngay dau tien nhu truoc.
 - Nhap ngay export thu cong de dat ten PNG/ZIP/snapshot dung cho lan lam viec hien tai.
 - Dan nhanh danh sach dang text: dong dau la cong ty, cac dong sau la `ten - chuc vu`; ho tro cac dau tach `-`, `:`, `–`, `—`, `|`, `->`, `=>`, `/`, `;`, `•`, tu bo so thu tu va nhan dien Mr./Ms./Mrs./ong/ba/anh/chi/co/chu.
 - Khi nhap tu Excel hoac dan text, chuc vu va vai tro duoc tu dong viet hoa dau moi tu; snapshot JSON giu nguyen noi dung goc.
@@ -41,6 +43,9 @@ Ung dung hien co 3 tab layout trong panel chinh sua:
 ## Xuat file Word
 
 Nut `Tai Word` sinh thang file `.docx` khong can render PNG truoc, khong can mang.
+
+- Logo PHIL/INTER PHARMA dung anh PNG nhung san trong app cho ca 3 layout; dieu khien co PHIL thay doi kich thuoc toan logo va giu nguyen ti le.
+- Khi xuat Word, logo PHIL duoc nhung vao `word/media/phil-logo.png`, khong can file anh ben ngoai. Noi dung khach van la text chinh sua duoc. Xuat PNG doi anh tren board tai xong truoc khi render.
 
 - Kho giay A4 ngang 297x210mm, le trang 0.
 - Khung board duoc ve bang shape `roundRect` cua DrawingML nen **giu nguyen bo goc**; ban kinh goc tinh dung theo `border-radius` cua board, do day vien va mau vien lay tu `frameColor`.
@@ -86,20 +91,28 @@ Khi can sua logic, agent thuong can:
 3. Kiem tra lai template van parse duoc bang `JSON.parse`.
 4. Neu sua UI, mo file tren trinh duyet de xem lai khi can.
 
+## Thu tu menu chinh sua
+
+Giu 3 tab `Noi dung / Content`, `Thiet ke / Design`, `Du lieu / Data`.
+
+- `Du lieu`: Nhap Excel / mo JSON (luon hien, kem bo chon ngay), Dan danh sach (thu gon duoc), Ngay xuat file, Xoa tat ca (luon hien o cuoi). Nhap du lieu khong tu chuyen tab. Nhap Excel / mo JSON cung truy cap duoc khi dang o layout VIP.
+- `Noi dung`: danh sach cong ty va thanh vien hien ngay; tung cong ty van thu gon va doi thu tu bang nut len/xuong. VIP hien ten khach truoc, logo / ten cong ty khach sau, khong can mo collapse noi dung.
+- Cac tab giu vi tri cuon rieng trong phien hien tai. Cac nhom thu gon giu trang thai khi chinh gia tri, doi ngon ngu hoac chuyen tab/layout.
+
 ## Cau truc tab `Thiet ke`
 
 Tab `Thiet ke` gom 6 muc cha, moi muc chia tiep thanh cac nhom con:
 
-1. `Hien thi & danh sach`: nhom `Hien thi thong tin` (chuc vu / vai tro / chuc vu xuong dong) va nhom `Danh sach` (can giua danh sach, vien khung ten) - nhom sau chi hien o layout `Cu`.
-2. `Header PHIL / WELCOME`: nhom `Can header`, nhom `Co chu header` (co PHIL, co WELCOME), nhom `Khoang cach khoi` (khoang cach PHIL/WELCOME, khoang cach header xuong ten cong ty dau tien).
-3. `Kieu chu`: nhom `Kieu chu` (font, co chu tong the) va nhom `Co chu tung phan`.
-4. `Mau sac`: nhom `Mau chu dao` (bang mau + chon mau tu do), nhom `Mau chu`, nhom `Khung & vien` (mau vien + dat lai mau mac dinh).
-5. `Khoang cach & thut le`: nhom `Gian dong`, nhom `Khoang cach khoi` (giua cac cong ty, khoang cach quanh dau `-`), nhom `Thut le`.
-6. `Khung bang`: do day vien, bat/tat keo chinh kich thuoc, chieu cao khung.
+1. `Kich thuoc khung`: bat/tat keo chinh ngang/doc, chieu cao khung theo cac dieu khien san co. Mo san lan dau vao Thiet ke.
+2. `Thong tin hien thi`: bat/tat chuc vu, vai tro va chuc vu xuong dong.
+3. `Phong & co chu noi dung`: font, co chu tong the va co chu tung phan (cong ty, ten nguoi, chuc vu, vai tro theo layout).
+4. `Can chinh & khoang cach`: can giua danh sach (layout Cu), gian dong tung phan, khoang cach giua cong ty/quanh dau `-`, thut le toan nhom/ten nguoi.
+5. `Logo & WELCOME`: can ca cum va can rieng WELCOME, font WELCOME, co logo/co WELCOME, khoang cach logo-WELCOME va khoang cach xuong noi dung.
+6. `Mau sac & duong vien`: mau chu dao, mau tung loai chu, mau/do day vien, vien khung ten (layout Cu), dat lai mau mac dinh.
 
 Cac hang chi ap cho mot layout duoc boc trong `sc-if` theo `isOld` / `isStandard`. Markup dung cac class dung chung `wb-group`, `wb-group-title`, `wb-row`, `wb-row-label`, `wb-step`, `wb-step-val`, `wb-toggle-row`, `wb-switch`, `wb-color-input`, `wb-seg`, `wb-hint` khai bao trong `<style>` cua template.
 
-Luu y khi sua: DC bo qua attribute `open` khong gia tri tren `<details>`, nen moi muc luon dong khi render lan dau; trang thai mo/dong do nguoi dung bam se duoc giu qua cac lan re-render.
+Luu y khi sua: DC bo qua attribute `open` khong gia tri tren `<details>`. `redesignEditor()` sap xep cac khoi template truoc khi DC bien dich; khong di chuyen DOM do React quan ly. Script hanh vi dung `data-wb-section` de mo mac dinh nhom khung va giu trang thai mo/dong cua tung nhom trong phien.
 
 ## Cac diem logic quan trong
 
@@ -110,9 +123,12 @@ Luu y khi sua: DC bo qua attribute `open` khong gia tri tren `<details>`, nen mo
 - Mau duoc day xuong board bang CSS variable tren khung: `--pri`, `--cname`, `--cpos`, `--crole`.
 - Khoang cach khoi luu o `oldHeaderBodyGap` / `oldGroupGap` (layout `Cu`) va `stdHeaderBodyGap` / `stdGroupGap` (layout `Thuong`).
 - Render tab `Cu` dung danh sach tinh toan `oldCompanies`.
+- `oldListMetrics(d)` do chu bang canvas theo font/co chu hien tai, dung chung cho layout Cu va Word. Cot ten/chuc vu/vai tro dung chieu rong do tu toan danh sach; neu khung hep thi gioi han cot va cho chu xuong dong. Tinh lai sau khi font tai xong. Cot ten keo tay `oldNameWidth` chi duoc uu tien khi bat chinh kich thuoc; tat toggle se xoa gia tri nay de tro ve tu dong.
+- `oldSeparatorPadding` la so px dem moi ben dau phan cach (0-120, gioi han them theo khung de tranh tran). Snapshot cu chi co `oldDashGap` van doc duoc: quy doi tu do rong o cu sang dem hai ben theo glyph dau gach cua font dang dung. Khong sua du lieu snapshot khi mo; lan chinh khoang cach tiep theo ghi truong moi.
 - Render tab `Thuong` dung danh sach tinh toan `companies`.
 - Render tab `VIP` dung `vip.names`, `vip.guestLogo`, `vip.guestName`.
 - Nhap Excel dung SheetJS trong ham `parseWorkbook`.
+- `sortedImportDates()` va `importDateTime()` trong loader sap ngay Excel cho ca luong nhap chinh va luong du phong. Chi sap danh sach ngay, khong sap lai dong du lieu; chap nhan ngay da chuan hoa tu serial Excel va chuoi dd/mm/yyyy hoac yyyy-mm-dd (ca dau `.` / `-` / `/`), kiem tra ngay thuc te theo UTC de tranh loi mui gio va ngay tran thang. JSON khong di qua buoc sap nay.
 - Xuat PNG dung `html-to-image` trong `renderStagePng`.
 - Xuat `.docx` bat dau tu `buildDocx()`. File `.docx` la mot zip chua OOXML nen dung lai `makeZip()` (tham so thu hai la MIME) va `crc32()` co san, khong them thu vien nao. `makeZip()` ghi che do STORE khong nen, Word chap nhan binh thuong; entry dau tien bat buoc la `[Content_Types].xml`.
 - Noi dung Word dung trong `docxDocumentXml()`, moi layout mot ham: `docxOldBody()`, `docxStandardBody()`, `docxVipBody()`. Cac helper `docxRun/docxPara/docxCell/docxTable` phat XML dung thu tu schema cua WordprocessingML (vi du `w:rPr` phai la rFonts, b, caps, color, spacing, sz, lang).
@@ -121,6 +137,7 @@ Luu y khi sua: DC bo qua attribute `open` khong gia tri tren `<details>`, nen mo
 - Ban kinh bo goc: `a:gd name="adj"` tinh theo 1/100000 cua canh ngan hon, nen `border-radius` cua board duoc quy doi truc tiep sang ti le tuong duong.
 - Quy doi kich thuoc: 1 px tren board = `docxScale()` point, tinh tu chieu rong khung board anh xa sang bang rong 270mm. Tu do co `docxHalfPt()` cho co chu va `docxTwips()` cho chieu rong/khoang cach.
 - Giai dong dung `docxExactLine()` voi `w:lineRule="exact"`. Neu de `auto`, Word cong them leading cua font va lam board tran sang trang 2; san 1.2em de khong cat dau tieng Viet va chu Han.
+- Bang thanh vien layout Cu trong DOCX dung cot co dinh tu `oldListMetrics`, khong chia phan trong con lai cho chuc vu/vai tro hay dung autofit. O dau phan cach khong cong le ngang rieng, de giu dung khoang dem tren board. Tai Word doi font san sang truoc khi do cot.
 
 ## Cach chay
 
