@@ -95,7 +95,7 @@ Khi can sua logic, agent thuong can:
 
 Giu 3 tab `Noi dung / Content`, `Thiet ke / Design`, `Du lieu / Data`.
 
-- `Du lieu`: Nhap Excel / mo JSON (luon hien, kem bo chon ngay), Dan danh sach (thu gon duoc), Ngay xuat file, Xoa tat ca (luon hien o cuoi). Nhap du lieu khong tu chuyen tab. Nhap Excel / mo JSON cung truy cap duoc khi dang o layout VIP.
+- `Du lieu`: Nhap tu file Excel / JSON / Word (luon hien, kem bo chon ngay), Dan danh sach (thu gon duoc), Ngay xuat file, Xoa tat ca (luon hien o cuoi). Nhap du lieu khong tu chuyen tab. Nhap tu file cung truy cap duoc khi dang o layout VIP.
 - `Noi dung`: danh sach cong ty va thanh vien hien ngay; tung cong ty van thu gon va doi thu tu bang nut len/xuong. VIP hien ten khach truoc, logo / ten cong ty khach sau, khong can mo collapse noi dung.
 - Cac tab giu vi tri cuon rieng trong phien hien tai. Cac nhom thu gon giu trang thai khi chinh gia tri, doi ngon ngu hoac chuyen tab/layout.
 
